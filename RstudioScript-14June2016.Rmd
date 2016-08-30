@@ -12,8 +12,8 @@
 # library(knitr)
 # source("http://www.Bioconductor.org/biocLite.R")
 # biocLite("BiocUpgrade")
-# install.packages("seqinr")
-
+install.packages("seqinr")
+install.packages("rentrez")
 # I can now source my functions and call them! Set the working directory to the top
 # level of the project.
 # To call the function, do: 
