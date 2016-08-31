@@ -8,7 +8,6 @@ biocLite("BiocUpgrade")
 
 Getting started in R: Set the working directory
 
-
 Add evniroment details to allow qsub submission from within RStudio:
 ```{r}
 Sys.setenv(SGE_ROOT="/opt/gridengine")
@@ -20,18 +19,24 @@ Sys.setenv(SGE_QMASTER_PORT="536")
 
 Install and load necessary packages
 ```{r}
+
 install.packages("rentrez")
 install.packages("xlsx")
 install.packages("ape")
+
 ```
 
-
-Record the folder where fasta file is (there should be only one)
+Keep the library() loading separate from the install.packages chunk
 ```{r}
 library(knitr)
 library("xlsx")
 library("ape")
 library(Biostrings)
+```
+
+Record the folder where fasta file is (there should be only one)
+```{r}
+
 ID_Folder <- "Helotiales"
 
 # # if I want to create my own fasta
