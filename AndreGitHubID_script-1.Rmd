@@ -1,10 +1,10 @@
 André's GitHub Identification Script
 ====================================================================================================
 
-
 Setting things up:
 Installing the required packages for R: This is to be done in the R command line and not in R studio
-source("http://www.Bioconductor.org/biocLite.R") biocLite("BiocUpgrade")
+source("http://www.Bioconductor.org/biocLite.R") 
+biocLite("BiocUpgrade")
 
 Getting started in R: Set the working directory 
 > setwd("~/") 
