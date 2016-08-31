@@ -1,4 +1,4 @@
-André's GitHub Identification Script
+André's GitHub Identification Script AndreGitHubID_script-1.Rmd
 ====================================================================================================
 
 Setting things up:
