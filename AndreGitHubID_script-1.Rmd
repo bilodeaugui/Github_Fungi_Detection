@@ -20,19 +20,18 @@ Sys.setenv(SGE_QMASTER_PORT="536")
 
 Install and load necessary packages
 ```{r}
-library(knitr)
 install.packages("rentrez")
 install.packages("xlsx")
 install.packages("ape")
-library("xlsx")
-library("ape")
-library(Biostrings)
 ```
 
 
 Record the folder where fasta file is (there should be only one)
 ```{r}
-
+library(knitr)
+library("xlsx")
+library("ape")
+library(Biostrings)
 ID_Folder <- "Helotiales"
 
 # # if I want to create my own fasta
