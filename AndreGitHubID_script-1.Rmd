@@ -23,7 +23,7 @@ Install and load necessary packages
 install.packages("rentrez")
 install.packages("xlsx")
 install.packages("ape")
-
+install.packages("seqinr")
 ```
 
 Keep the library() loading separate from the install.packages chunk
@@ -140,6 +140,15 @@ writeXStringSet(lachWiiITS,
                 format = "fasta")
 fasta_for_GenBank <- paste(genBankPath, "fasta_for_GenBank.fasta", sep = "")
 
+# For when starting with only one sequence in the fasta_forGenBank.fasta:
+align_txt <- sapply(lachWiiITS, function(x) toString(x))
+
+# Remove all gaps, commas, and spaces
+align_txt <- as.character(gsub("-|,| ", "", align_txt))
+
+fasta_for_GenBank2 <- cbind(rownames(lachWiiITS), align_txt)
+
+
 ```
 
 Blast to get related ITS sequences 
@@ -194,6 +203,165 @@ Clean-up step: Remove the output files while keeping the qsub and bash file:
 ```{r}
 
 RemoveQsubTempFiles(sharedPathAn, prefix)
+
+```
+
+Read and consolitdates BLAST outputs
+```{r}
+library("seqinr")
+GB_Blast_table <- read.table(paste(genBankPath, "fasta_for_GenBank.fasta.out", sep = ""),
+                             header = FALSE, 
+                             stringsAsFactors = FALSE)
+colnames(GB_Blast_table) <- c("query_id",   "subject_ids", " %identity", "alignment_length", 
+                              "mismatches", "gap_opens",   "q_start",    " q_end", 
+                              "s_start",    "s_end",       "evalue",     " bit_score")
+
+# to break multiple gi numbers/ accessions from NCBI table
+mult_gi <- cbind(gregexpr(";", GB_Blast_table$subject_ids, 
+                          ignore.case = FALSE, 
+                          perl        = FALSE, 
+                          fixed       = FALSE, 
+                          useBytes    = FALSE))
+
+new_GB_Blast_table <- data.frame()
+
+for(i in 1:nrow(GB_Blast_table)) {
+  if (unlist(mult_gi[i])[1] != -1) {   
+    parsed_names <- strsplit(as.character(GB_Blast_table$subject_ids[i]), ";")[[1]]  # [[1]] to show first element  
+    temp_table <- do.call("rbind", replicate((length(unlist(mult_gi[i])) + 1), GB_Blast_table[i,], simplify = FALSE))
+    temp_table$subject_ids <- parsed_names   
+    new_GB_Blast_table <- rbind(new_GB_Blast_table, temp_table) 
+  } else {
+    new_GB_Blast_table <-  rbind(new_GB_Blast_table, GB_Blast_table[i,]) } 
+}
+
+GB_Blast_table <- new_GB_Blast_table 
+
+summary(GB_Blast_table)
+
+colnames(GB_Blast_table)[2] <- "GB_accession"
+
+unique_GB <- unique(GB_Blast_table$GB_accession)
+
+library("ape")
+sequences <- read.GenBank(unique_GB, 
+                          seq.names = unique_GB, 
+                          species.names = TRUE,
+                          gene.names    = FALSE, 
+                          as.character  = TRUE)
+
+sequences_ord <- sequences[order(names(sequences))] 
+names(sequences_ord)[1]
+attr(sequences, "species")
+
+full_names <- data.frame(attr(sequences, "species"),names(sequences), stringsAsFactors = FALSE)
+full_names$SpStrain <-  do.call(paste, c(full_names[1:2], sep="_"))
+full_names_ord <- full_names[order(full_names$names.sequences.),] 
+nrow(full_names_ord)
+```
+
+
+```{r}
+library(Biostrings)
+
+GB_DNAstring <- DNAStringSet()
+for(i in 1:length(sequences_ord)) {
+  temp <- DNAStringSet(paste(sequences_ord[[i]], collapse = ""))
+  names(temp)  <- full_names_ord$SpStrain[i]
+  GB_DNAstring <- c(GB_DNAstring, temp)
+} 
+
+# Creates a +/- column for orientation of sequences
+GB_Blast_table$orientation <- sign(GB_Blast_table$s_end - GB_Blast_table$s_start)
+GB_Blast_table$length      <- abs(GB_Blast_table$s_end - GB_Blast_table$s_start)
+GB_Blast_table$query_id    <- as.character(GB_Blast_table$query_id)
+
+# Put together data from multiple hits on single line
+dat_agg <- aggregate(GB_Blast_table[c(2:14)], 
+                     by  = list(GB_Blast_table$GB_accession, GB_Blast_table$GB_accession),
+                     FUN = c)
+
+# find min and max and sense of hits
+for(i in 1:nrow(dat_agg)) {
+  dat_agg$min[i] <- min(unlist(c(dat_agg$s_start[i],dat_agg$s_end[i])))
+  dat_agg$max[i] <- max(unlist(c(dat_agg$s_start[i],dat_agg$s_end[i])))
+  dat_agg$sense[i] <- mean(unlist(c(dat_agg$orientation[i]))) 
+}
+
+
+# add a column with bp (width) of sequences.
+dat_agg$bp    <- width(GB_DNAstring)
+dat_agg$width <- dat_agg$max - dat_agg$min
+dat_agg$diff  <- dat_agg$width - dat_agg$max
+dat_agg       <- dat_agg[order(as.character(dat_agg$Group.1)), ] 
+
+# to make sure that name order are the same
+check_order <- data.frame(names(GB_DNAstring), dat_agg[,1])
+
+# Very Important
+# THE ORDER OF THESE TWO COLUMNS SHOULD BE THE SAME
+# SEQUENCES WILL BE OFF IF NOT
+write.table(check_order, 
+            file = paste(sharedPath, ID_Folder, "CHECK ORDER OF FASTA file AND BLAST TABLE.csv", 
+                         sep = ""), 
+            append = FALSE, 
+            sep = ",", 
+            col.names = NA)
+```
+
+From here: 
+http://stackoverflow.com/questions/13545547/how-to-write-a-data-frame-with-one-column-a-list-to-a-file
+```{r}
+library("xlsx")
+
+dataset2 <- dat_agg # make a copy just to be on the safe side
+dataset2[sapply(dataset2, is.list)] <- 
+    sapply(dataset2[sapply(dataset2, is.list)], 
+           function(x)sapply(x, function(y) paste(unlist(y), collapse = ", ")))
+
+write.xlsx(dataset2, file = paste(sharedPath, 
+                                  ID_Folder, "/to check BLAST results table.xlsx", 
+                                  sep = ""), 
+           sheetName = "Sheet1", 
+           col.names = TRUE, 
+           row.names = TRUE, 
+           append    = FALSE, 
+           showNA    = TRUE)
+
+attributes(GB_DNAstring)
+```
+
+Trim
+```{r}
+
+i <- 8
+
+x_trim <- GB_DNAstring
+
+for(i in 1:length(x_trim)) {
+  if (dat_agg$sense[i] == 1) {
+    x_trim[i] <- DNAStringSet(x_trim[i], start = dat_agg$min[i], 
+                              end   = dat_agg$max[i], 
+                              width = NA, 
+                              use.names = TRUE)
+    print(c(i, dat_agg$sense[i]))
+    } else {
+        if (dat_agg$sense[i] == -1) {
+            x_trim[i] <- reverseComplement(DNAStringSet(x_trim[i], start = dat_agg$min[i], 
+                                                        end   = dat_agg$max[i], 
+                                                        width = NA, 
+                                                        use.names = TRUE)) 
+            print(c(i, dat_agg$sense[i])) 
+            } else { 
+                x_trim[i] <- DNAStringSet("NNNN") 
+                print(c(i, "NNNN")) 
+                }
+        } 
+  }
+
+# Show outliers
+mean_length  <- mean(width(x_trim), trim = 0.05)
+query_length <- mean(nchar(fasta_for_GenBank$align_txt))
 
 ```
 
