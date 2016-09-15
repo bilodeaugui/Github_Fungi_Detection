@@ -36,9 +36,65 @@ library(Biostrings)
 
 Record the folder where fasta file is (there should be only one)
 ```{r}
+library("seqinr")
+sharedPath <- "/home/CFIA-ACIA/girouxeml/PIRL_working_directory/"
+ID_Folder <- "Helotiales_ITS"
+dir.create(paste("", ID_Folder, sep = ""), 
+           showWarnings = TRUE,
+           recursive    = FALSE)
+lachWuuITSFasta <- paste(sharedPath, 
+                         "data/Lachnellula_willkommii/Final_Sequences/ITS_Consensus.fasta", 
+                         sep = "")
+lachWiiITS      <- readAAStringSet(paste(lachWuuITSFasta), format = "fasta")
+names(lachWiiITS) <- "Lachnellula_willkommii-ITS"
+write.fasta(sequences = as.list(lachWiiITS[,2]), names = rownames(lachWiiITS), nbchar = 80,
+            file.out = paste(ID_Folder, "/GenBank/fasta_for_GenBank.fasta", sep = ""),
+            open = "w"))
+```
 
-ID_Folder <- "Helotiales"
+Blast to get related ITS sequences 
+```{r}
+library("rentrez")
+dir.create(paste("", ID_Folder, "/", "GenBank/", sep = ""), 
+           showWarnings = TRUE,
+           recursive    = FALSE)
+query <- "(Helotiales[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+web_env_search <- entrez_search(db="nuccore", query, retmax=999999)
+web_env_search
+length(web_env_search$ids)
+write.table(web_env_search$ids, file = paste(sharedPath, ID_Folder,"/GenBank/gilist.txt", sep = ""), 
+            append = FALSE, 
+            quote  = FALSE, 
+            row.names = FALSE, 
+            col.names = FALSE)
 
+outfmt_cols <- c("qseqid",   "sallacc", "pident", "length", 
+                 "mismatch", "gapopen", "qstart", "qend",
+                 "sstart",   "send",    "evalue", "bitscore")
+pathBlastn    <- "/opt/bio/ncbi-blast+/bin/blastn"
+pathBlastDbNt <- "/isilon/biodiversity/reference/ncbi/blastdb/reference/nt/nt"
+maxTargetSeqs <- 200
+dustBlastn    <- "no"
+cmd <- paste(pathBlastn, 
+             " -db ", pathBlastDbNt,
+             " -query ", lachWiiITS,
+             " -max_target_seqs ", maxTargetSeqs,
+             " -gilist ", web_env_search$ids,
+             " -dust ", dustBlastn,
+             " -outfmt '6 ", paste(outfmt_cols, collapse = " "),
+             " ' -out ", ID_Folder, "/GenBank/fasta_for_GenBank.fasta.out", 
+             sep = "")
+             
+cmd           <- paste("/opt/bio/ncbi-blast+/bin/blastn -db /isilon/biodiversity/reference/ncbi/blastdb/reference/nt/nt -query ",
+                     ID_Folder, "/GenBank/fasta_for_GenBank.fasta -max_target_seqs 200 -gilist ", ID_Folder, 
+                     "/GenBank/gilist.txt -dust no -outfmt '6 ", paste(outfmt_cols, collapse=" "), "' -out ", 
+                     ID_Folder, "/GenBank/fasta_for_GenBank.fasta.out", sep="")
+system(cmd)
+
+```
+
+
+```{r}
 # # if I want to create my own fasta
 # dir.create(paste("", ID_Folder, sep=""), showWarnings = TRUE, recursive = FALSE)
 # 
