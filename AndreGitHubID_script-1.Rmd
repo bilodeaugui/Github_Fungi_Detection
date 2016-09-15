@@ -75,7 +75,7 @@ query <- "(Helotiales[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) NOT(enviro
 web_env_search <- entrez_search(db="nuccore", query, retmax=999999)
 web_env_search
 length(web_env_search$ids)
-write.table(web_env_search$ids, file = paste(sharedPath, ID_Folder,"/GenBank/gilist.txt", sep = ""), 
+write.table(web_env_search$ids, file = paste(genBankPath, "gilist.txt", sep = ""), 
             append = FALSE, 
             quote  = FALSE, 
             row.names = FALSE, 
@@ -90,12 +90,12 @@ maxTargetSeqs <- 200
 dustBlastn    <- "no"
 cmd <- paste(pathBlastn, 
              " -db ", pathBlastDbNt,
-             " -query ", lachWiiITS,
+             " -query ", fasta_for_GenBank,
              " -max_target_seqs ", maxTargetSeqs,
-             " -gilist ", web_env_search$ids,
+             " -gilist ", paste(genBankPath, "gilist.txt", sep = ""),
              " -dust ", dustBlastn,
              " -outfmt '6 ", paste(outfmt_cols, collapse = " "),
-             " ' -out ", ID_Folder, "/GenBank/fasta_for_GenBank.fasta.out", 
+             " ' -out ", paste(genBankPath, "fasta_for_GenBank.fasta.out", sep = ""), 
              sep = "")
              
 cmd           <- paste("/opt/bio/ncbi-blast+/bin/blastn -db /isilon/biodiversity/reference/ncbi/blastdb/reference/nt/nt -query ",
