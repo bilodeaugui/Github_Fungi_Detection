@@ -178,13 +178,22 @@ cmd <- paste(pathBlastn,
              " -outfmt '6 ", paste(outfmt_cols, collapse = " "),
              " ' -out ", paste(genBankPath, "fasta_for_GenBank.fasta.out", sep = ""), 
              sep = "")
+suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
 
-cmd2 <- paste("/opt/gridengine/bin/linux-x64/qsub -cwd ", 
-              sharedPathAn, prefix, "/", paste(prefix, "sh", sep = "."), 
-              sep = "")
-system(cmd2)    
-system("/opt/gridengine/bin/linux-x64/qstat")
+# The following doesn't work. Output temp files are going to the sharedPath instead of output 
+# specified, error results.
 
+# cmd2 <- paste("/opt/gridengine/bin/linux-x64/qsub -cwd ", 
+#               sharedPathAn, prefix, "/", paste(prefix, "sh", sep = "."), 
+#               sep = "")
+# system(cmd2)    
+# system("/opt/gridengine/bin/linux-x64/qstat")
+```
+
+Clean-up step: Remove the output files while keeping the qsub and bash file:
+```{r}
+
+RemoveQsubTempFiles(sharedPathAn, prefix)
 
 ```
 
