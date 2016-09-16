@@ -431,6 +431,35 @@ RemoveQsubTempFiles(sharedPathAn, prefix)
 
 ```
 
+```{r}
+
+alignmentFile2 <- paste(sharedPath, idFolder, "All_files_aligned.fasta", sep = "")
+align1 <- readAAStringSet(alignmentFile2, format = "fasta")
+align <- read.dna(alignmentFile2, format="fasta")
+# Raw distance is p-distance with substitution -> d: transition + transversion
+dm <- dist.dna(align, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
+maxV <- max(rowSums(dm), na.rm = TRUE)
+
+```
+
+This is to get the root of the tree with the most distant species and generate nj tree
+```{r}
+
+myRoot <- which(rowSums(dm) == maxV)
+max(dm, na.rm = TRUE)
+nrow(dm)
+
+
+tree <- njs(dm)
+write.tree(tree, file = paste(sharedPath, idFolder, "nj_tree.newick", sep = ""), 
+           append = FALSE, digits = 15, tree.names = FALSE)
+
+# Code below doesn't work, looks like it's hanging, where is the input?
+# pdf(file = paste(sharedPath, idFolder, "NJ_bionj_K80_tree_GenBank_and_ID_trimmed.pdf", sep = ""), 
+#     width = 8, height =36 )
+
+
+```
 
 
 
