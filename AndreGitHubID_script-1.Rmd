@@ -372,45 +372,14 @@ RemoveQsubTempFiles(sharedPathAn, prefix)
 
 ```
 
-
-
-
-```{r}
-
-lachWiiITS        <- readAAStringSet(paste(lachWiiITSFasta), format = "fasta")
-names(lachWiiITS) <- "Lachnellula_willkommii-ITS"
-fastaForGenBank   <- lachWiiITS
-
-writeXStringSet(lachWiiITS, 
-                file   = paste(genBankPath, "fasta_for_GenBank.fasta", sep = ""),
-                append = FALSE, 
-                format = "fasta")
-
-
-```
-
-If only one sequence start with this - I'm not sure how to work this....
-```{r}
-# # create text file from alignment
-# align <- read.dna(paste(ID_Folder, "/", ID_fasta_files, sep =""), format="fasta", as.character = FALSE)
-# # create text file from alignment
-# align_txt <- sapply(align , function(x) toString(x))
-# # remove all gaps, commas, and spaces
-# align_txt <- as.character(gsub("-|,| ", "", align_txt))
-# fasta_for_GenBank <- cbind(rownames(align), align_txt)
-# rownames(fasta_for_GenBank) <- rownames(align)
-```
-
-
-
-
 Read and consolitdates BLAST outputs
 ```{r}
 library("seqinr")
 
-gbBlastTable <- read.table(paste(genBankPath, "fasta_for_GenBank3.fasta.out", sep = ""),
-                             header = FALSE, 
-                             stringsAsFactors = FALSE)
+gbBlastTable <- read.table(paste(genBankPath, "fasta_for_GenBank.fasta.out", sep = ""), 
+                           header = FALSE, 
+                           stringsAsFactors = FALSE)
+
 colnames(gbBlastTable) <- c("query_id",   "subject_ids", " %identity", "alignment_length", 
                             "mismatches", "gap_opens",   "q_start",    " q_end", 
                             "s_start",    "s_end",       "evalue",     " bit_score")
@@ -440,7 +409,10 @@ gbBlastTable <- newGbBlastTable
 summary(gbBlastTable)
 colnames(gbBlastTable)[2] <- "GB_accession"
 uniqueGB <- unique(gbBlastTable$GB_accession)
+```
 
+
+```{r}
 library("ape")
 sequences <- read.GenBank(uniqueGB, 
                           seq.names = uniqueGB, 
@@ -452,9 +424,9 @@ sequenceOrder <- sequences[order(names(sequences))]
 names(sequenceOrder)[1]
 attr(sequences, "species")
 
-fullNames <- data.frame(attr(sequences, "species"),names(sequences), stringsAsFactors = FALSE)
-fullNames$SpStrain <-  do.call(paste, c(fullNames[1:2], sep="_"))
-fullNamesOrdered <- fullNames[order(fullNames$names.sequences.),] 
+fullNames <- data.frame(attr(sequences, "species"), names(sequences), stringsAsFactors = FALSE)
+fullNames$SpStrain <-  do.call(paste, c(fullNames[1:2], sep = "_"))
+fullNamesOrdered   <- fullNames[order(fullNames$names.sequences.),] 
 nrow(fullNamesOrdered)
 
 ```
@@ -502,7 +474,7 @@ checkOrder <- data.frame(names(gbDNAstring), dataAgg[,1])
 # THE ORDER OF THESE TWO COLUMNS SHOULD BE THE SAME
 # SEQUENCES WILL BE OFF IF NOT
 write.table(checkOrder, 
-            file = paste(sharedPath, idFolder, "CHECK ORDER OF FASTA file AND BLAST TABLE_3.csv", 
+            file = paste(sharedPath, idFolder, "CHECK ORDER OF FASTA file AND BLAST TABLE.csv", 
                          sep = ""), 
             append = FALSE, 
             sep = ",", 
@@ -561,6 +533,69 @@ queryLength <- mean(nchar(fastaForGenBank))
 
 ```
 
+This module is to fix the GenBank output
+```{r}
+
+library("stringr")
+
+gbNames <- names(xTrim)
+
+# This is a loop to make some taxonomy glitches replacement to make the parsing with space accurate
+   for(i in 1:length(gbNames)) {
+     # This is to replace abbreviations like "R.secalis" in GenBank
+       regexp1 <- " ([[:upper:]]{1})(\\.)([[:lower:]]+) "
+       replacement1 <- str_extract(gbNames[i],regexp1)
+       replacement1 <- sub("\\.", " ", replacement1, ignore.case = FALSE)
+       gbNames[i] <- sub(" ([[:upper:]]{1})(\\.)([[:lower:]]+) ", replacement1, gbNames[i], ignore.case = FALSE)
+    # This is to replace " f. sp. " for "_f._sp._"   
+    #   string <- "Marssonina brunnea f. sp. multigermtubi MB_m1 tubulin beta chain (MBM_05801), mRNA"
+       regexp2 <- " ([[:lower:]]+) f. sp. (\\'?)([[:lower:]]+)(\\'?) "
+       replacement2 <- str_extract(gbNames[i],regexp2)
+       replacement2 <- sub(" f. sp. ", "_.f._sp._", replacement2, ignore.case = FALSE)
+       gbNames[i] <- sub(" ([[:lower:]]+) f. sp. (\\'?)([[:lower:]]+)(\\'?) ", replacement2, gbNames[i], ignore.case = FALSE)
+   }
+  
+
+gbNames <- sub(" ", "|", gbNames, ignore.case = FALSE)
+gbNames <- sub(" ", "|", gbNames, ignore.case = FALSE)
+gbNames <- sub(" ", "|", gbNames, ignore.case = FALSE)
+
+
+# *** Over here!!!
+parsedCol <- data.frame(matrix(unlist(strsplit(as.character(gbNames), "\\|")), 
+                               nrow  = length(gbNames), 
+                               byrow = T),
+                        stringsAsFactors = FALSE)
+
+# This is a loop to make extract strain numbers.  There are two approaches, one when there is "strain|isolate|voucher" and one 
+# where the strain number is right after species of f.sp. name.  This may need to be tweaked for different strain codes
+  for(i in 1:length(parsedCol$X8)) {
+      if  (grepl("strain|isolate|voucher", parsedCol$X8[i])) {   
+        regexp <- "(strain|isolate|voucher) ([[:alpha:]]*)( ?|\\-*|\\_*)([[:digit:]]*|[[:upper:]]*)(\\.*|\\-*)([[:digit:]]*|[[:upper:]]*)"
+        parsedCol$strain[i] <- str_extract(parsedCol$X8[i],regexp)
+      } else {
+        # the trick for this was to leave a blank when there is no strain number
+        regexp <- "([[:upper:]]*)( ?|\\-*|\\_*)([[:digit:]]*|[[:upper:]]*)(\\.*|\\-*)([[:digit:]]*|([[:alpha:]]+[[:digit:]]+))"
+        parsedCol$strain[i] <- str_extract(parsedCol$X8[i],regexp) } 
+    }
+
+# remove strain|isolate|voucher in strain codes
+parsedCol$strain2 <- sub("strain |isolate |voucher ", "", parsedCol$strain, ignore.case = FALSE)
+parsedCol$strain2 <- sub("_", "", parsedCol$strain2, ignore.case = FALSE)
+parsedCol$strain2 <- sub(" ", "", parsedCol$strain2, ignore.case = FALSE)
+parsedCol$GB <- sub("\\.[[:digit:]]", "", parsedCol$X4, ignore.case = FALSE)
+parsedCol$GB <- sub("_", "", parsedCol$GB, ignore.case = FALSE)
+parsedCol$species <- gsub("_", "", parsedCol$X7, ignore.case = FALSE)
+#for_names <- paste(parsedCol$X6,"_",parsedCol$species,"_",parsedCol$GB,"_strain(",parsedCol$strain2,")", sep = "")
+names(x_trim) <- paste(parsedCol$X6,"_",parsedCol$species,"_",parsedCol$GB,"_strain(",parsedCol$strain2,")", sep = "")
+
+writeXStringSet(x_trim, file="new_names.fasta", append=FALSE, format="fasta") 
+
+
+
+```
+
+
 Calculate a confidence interval based on all sequences
 ```{r}
 library("chemometrics")
@@ -588,7 +623,8 @@ writeXStringSet(xtrimNoOutliers,
                 append = FALSE, format = "fasta") 
 
 
-cmd2 <- paste("cat ", # fastaForGenBankPath, " ",
+cmd2 <- paste("cat ",  
+              sharedPath, idFolder, "query_aligned_fasta.fasta", " ",
               sharedPath, idFolder, "GB_csv_extracted.fasta > ",  
               sharedPath, idFolder, "to_align.fasta", 
               sep = "")
@@ -596,6 +632,8 @@ system(cmd2)
 ```
 
 Do MAFFT alignement of sequences
+
+Previous Note (not for this round for chunk):
 Here I left out my query sequence because it is over 3000 bp, while the mean length of all the 
 hits is 1300 bp. Keeping my query results in losing over 95% of the sequences in the toRemove 
 block above. I did see that there is a sequence in the genBank match fasta file with 100% similarity 
@@ -611,6 +649,12 @@ cmd3 <- paste("/opt/bio/mafft/bin/mafft --auto --reorder ",
               sep = "")
 
 suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd3, prefix, suffix)
+
+```
+
+Check if the qsub job is still running:
+```{r}
+
 system("/opt/gridengine/bin/linux-x64/qstat")
 
 ```
@@ -622,13 +666,19 @@ RemoveQsubTempFiles(sharedPathAn, prefix)
 
 ```
 
+
+**** Error over here - when I run line: 
+maxV <- max(rowSums(dm), na.rm = TRUE)
+Warning message: 
+In max(rowSums(dm), na.rm = TRUE) :
+  no non-missing arguments to max; returning -Inf
 ```{r}
 
 alignmentFile2 <- paste(sharedPath, idFolder, "All_files_aligned.fasta", sep = "")
-align1 <- readAAStringSet(alignmentFile2, format = "fasta")
-align <- read.dna(alignmentFile2, format="fasta")
+align  <- read.dna(alignmentFile2, format = "fasta")
+
 # Raw distance is p-distance with substitution -> d: transition + transversion
-dm <- dist.dna(align, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
+dm   <- dist.dna(align, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
 maxV <- max(rowSums(dm), na.rm = TRUE)
 
 ```
@@ -651,6 +701,43 @@ write.tree(tree, file = paste(sharedPath, idFolder, "nj_tree.newick", sep = ""),
 
 
 ```
+
+****Over Here!!!
+
+```{r}
+
+lachWiiITS        <- readAAStringSet(paste(lachWiiITSFasta), format = "fasta")
+names(lachWiiITS) <- "Lachnellula_willkommii-ITS"
+fastaForGenBank   <- lachWiiITS
+
+writeXStringSet(lachWiiITS, 
+                file   = paste(genBankPath, "fasta_for_GenBank.fasta", sep = ""),
+                append = FALSE, 
+                format = "fasta")
+
+
+```
+
+If only one sequence start with this - I'm not sure how to work this....
+```{r}
+# # create text file from alignment
+# align <- read.dna(paste(ID_Folder, "/", ID_fasta_files, sep =""), format="fasta", as.character = FALSE)
+# # create text file from alignment
+# align_txt <- sapply(align , function(x) toString(x))
+# # remove all gaps, commas, and spaces
+# align_txt <- as.character(gsub("-|,| ", "", align_txt))
+# fasta_for_GenBank <- cbind(rownames(align), align_txt)
+# rownames(fasta_for_GenBank) <- rownames(align)
+```
+
+
+
+
+
+
+
+
+
 
 Now I have the aligned sequences and the newick tree. I can bring these into Geneious to visualize. 
 I had excluded my Lachnellula willkommii ITS concensus sequence that I obtained using the ITSx 
