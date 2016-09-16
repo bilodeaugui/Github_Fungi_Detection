@@ -125,11 +125,258 @@ dir.create(paste("", idFolder, "/", "GenBank/", sep = ""),
 genBankPath <- paste(sharedPath, idFolder, "GenBank/", sep = "")
 ```
 
+Option A: 1 starting sequence
+If I want to run this script with only 1 starting sequence:
+Specify Folder, read it, rename the sequence if necessary, and put that into the fasta for genBank
+variable.
 ```{r}
-
 lachWiiITSFasta <- paste(sharedPath, 
                          "data/Lachnellula_willkommii/Final_Sequences/ITS_Consensus.fasta",
                          sep = "")
+lachWiiITS        <- readAAStringSet(paste(lachWiiITSFasta), format = "fasta")
+names(lachWiiITS) <- "Lachnellula_willkommii-ITS"
+fastaForGenBank   <- lachWiiITS
+```
+
+Option B: >1 Starting sequences
+
+Find the fasta file(s)
+```{r}
+idFastaFiles <- list.files(path = paste(sharedPath, idFolder, sep = ""), 
+                           pattern = "\\.fas$|\\.fasta$", 
+                           recursive = FALSE)
+```
+
+Pick the right file(s)
+```{r}
+idFastaFiles
+idFastaFiles <- idFastaFiles[2] # If I only want this one
+idFastaFiles
+```
+
+If you have more than one fasta file, put all of your files into one bigger fasta file:
+```{r}
+cmd <- paste(" cat ", paste(sharedPath, idFolder, as.character(idFastaFiles), collapse = " ", sep = ""),
+             " > ", paste(sharedPath, idFolder, "query.fasta", sep = ""),
+             sep = "")
+
+system(cmd)
+
+idFastaFiles <- paste(sharedPath, idFolder, "query.fasta", sep = "")
+
+```
+
+
+Do a MAFFT alignment, linsi coomand:
+```{r}
+
+prefix    <- "A_original_query_First_MAFFT_linsi_Alignment"
+linsiPath <- "/opt/bio/mafft/bin/linsi"
+
+
+cmd <- paste(linsiPath, 
+             " --reorder '", idFastaFiles,
+             "' > ", paste(sharedPath, idFolder, "query_aligned_fasta.fasta", sep = ""),
+             sep = "")
+
+suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
+
+```
+
+Check if the qsub job is still running:
+```{r}
+system("/opt/gridengine/bin/linux-x64/qstat")
+```
+
+Clean-up step: Remove the output files while keeping the qsub and bash file:
+```{r}
+RemoveQsubTempFiles(sharedPathAn, prefix)
+```
+
+Trim the alignment:
+```{r}
+library("ape")
+
+align <- read.dna(paste(sharedPath, idFolder, "query_aligned_fasta.fasta", sep = ""), format = "fasta")
+dm    <- dist.dna(align, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
+tree  <- njs(dm)
+maxV  <- max(rowSums(dm), na.rm = TRUE)
+
+```
+
+To get the root of the tree with the most distant species:
+```{r}
+
+myRoot <- which(rowSums(dm) == maxV)
+max(dm, na.rm = TRUE)
+nrow(dm)
+pdf(file = paste(sharedPath, idFolder, "/", "NJ_tree_of_ID.pdf", sep = ""), width = 8, height = 14 )
+plot.phylo(type = "phylogram", root(tree, myRoot[1], node = NULL, resolve.root = TRUE), 
+           font = 1, cex = 0.52,  x.lim = 1 , edge.width = 1.1 , no.margin = TRUE)
+title(main = "NJ", outer = FALSE, cex.main = 1, font.main = 2)
+dev.off() 
+```
+
+Setting things up to get the number of blasts required for the tree:
+```{r}
+tree[[1]]
+dm <- dist.dna(align, model = "raw", pairwise.deletion = FALSE, as.matrix = TRUE)
+tree <- njs(dm)
+
+pdf(file = paste(sharedPath, idFolder, "/", "NJ_tree_of_ID_for_how_many_blasts.pdf", sep = ""), 
+    width = 8, height = 14 )
+
+plot.phylo(type = "phylogram", root(tree, myRoot[1], node = NULL, resolve.root = TRUE), 
+           font = 1, cex = 0.52 - (sqrt(nrow(dm))/70),  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, 
+           edge.width = 1.1 - (nrow(dm)/1200), no.margin = TRUE)
+
+title(main = "NJ", outer = FALSE, cex.main = 1, font.main = 2)
+
+dev.off()
+
+dm <- dist.dna(align, model = "raw", pairwise.deletion = FALSE, as.matrix = FALSE)
+fit <- hclust(dm, method = "average")
+
+```
+
+Number of groups based on NJ tree
+```{r}
+
+numClades <- 5 # based on the number of objects, see fit
+
+groups <- cutree(fit, numClades)
+group2 <- data.frame(names(groups), groups, stringsAsFactors = FALSE)
+
+```
+
+Create text file from alignment
+```{r}
+alignTxt <- sapply(align , function(x) toString(x))
+
+# Remove all gaps, commas, and spaces
+alignTxt <- as.character(gsub("-|,| ", "", alignTxt))
+alignLength <- sapply(alignTxt , function(x) nchar(x))
+group3 <- cbind(group2, alignLength, alignTxt)
+group3$alignTxt <- as.character(group3$alignTxt)
+```
+
+Create a table of the different cluster with the maximum sequence length for each
+```{r}
+maxima <- aggregate(alignLength ~ groups, data = group3[,c(2:3)], max)
+
+i <- 1
+
+# Pulls out a vector with a sequence name for each maximu (pulls out the first sequence when more 
+# than one have the same max length)
+
+maximaByGroup <- vector()
+
+for(i in 1:nrow(maxima)) {
+  temp1 <- subset(group3[,c(1:3)], 
+                  group3$groups == maxima$groups[i] & group3$alignLength == maxima$alignLength[i])
+  temp2 <- temp1$names.groups.[!duplicated(temp1$alignLength)]
+  maximaByGroup <- c(maximaByGroup, temp2)
+}
+
+sapply(group3, class)
+
+```
+
+Generate a fasta file that will be used to blast GenBank:
+```{r}
+
+fastaForGenBank <- group3[maximaByGroup,c(1,4)]
+
+```
+
+Write fasta file from the table text created to calculate length:
+```{r}
+library(seqinr)
+
+write.fasta(sequences = as.list(fastaForGenBank[,2]), names = rownames(fastaForGenBank), nbchar = 80, 
+            file.out  = paste(sharedPath, idFolder, "GenBank/fasta_for_GenBank.fasta", sep = ""), 
+            open = "w")
+
+fastaForGenBankPath <- paste(genBankPath, "fasta_for_GenBank.fasta", sep = "")
+
+```
+
+Blast to get related ITS sequences 
+```{r}
+library("rentrez")
+
+query <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
+           OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+           NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+webEnvSearch <- entrez_search(db="nuccore", query, retmax=999999)
+
+webEnvSearch
+
+length(webEnvSearch$ids)
+
+write.table(webEnvSearch$ids, file = paste(genBankPath, "gilist.txt", sep = ""), 
+            append = FALSE, 
+            quote  = FALSE, 
+            row.names = FALSE, 
+            col.names = FALSE)
+
+outfmtCols <- c("qseqid",   "sallacc", "pident", "length", 
+                "mismatch", "gapopen", "qstart", "qend", 
+                "sstart",   "send",    "evalue", "bitscore")
+pathBlastn    <- "/opt/bio/ncbi-blast+/bin/blastn"
+pathBlastDbNt <- "/isilon/biodiversity/reference/ncbi/blastdb/reference/nt/nt"
+maxTargetSeqs <- 400
+dustBlastn    <- "no"
+gapOpen       <- 1
+gapExtend     <- 1
+xDropGap      <- 30
+xDropGapFinal <- 100
+
+```
+
+
+```{r}
+
+prefix <- "A_firstBlast"
+
+cmd <- paste(pathBlastn, 
+             " -db ", pathBlastDbNt,
+             " -query ", fastaForGenBankPath,
+             " -max_target_seqs ", maxTargetSeqs,
+             " -gilist ", paste(genBankPath, "gilist.txt", sep = ""),
+             " -gapopen ", gapOpen,
+             " -gapextend ", gapExtend,
+             " -xdrop_gap ", xDropGap,
+             " -xdrop_gap_final ", xDropGapFinal,
+             " -dust ", dustBlastn,
+             " -outfmt '6 ", paste(outfmtCols, collapse = " "),
+             " ' -out ", paste(genBankPath, "fasta_for_GenBank.fasta.out", sep = ""), 
+             sep = "")
+
+
+suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
+```
+
+Check if the qsub job is still running:
+```{r}
+
+system("/opt/gridengine/bin/linux-x64/qstat")
+
+```
+
+
+Clean-up step: Remove the output files while keeping the qsub and bash file:
+```{r}
+
+RemoveQsubTempFiles(sharedPathAn, prefix)
+
+```
+
+
+
+
+```{r}
+
 lachWiiITS        <- readAAStringSet(paste(lachWiiITSFasta), format = "fasta")
 names(lachWiiITS) <- "Lachnellula_willkommii-ITS"
 fastaForGenBank   <- lachWiiITS
@@ -138,7 +385,7 @@ writeXStringSet(lachWiiITS,
                 file   = paste(genBankPath, "fasta_for_GenBank.fasta", sep = ""),
                 append = FALSE, 
                 format = "fasta")
-fastaForGenBankPath <- paste(genBankPath, "fasta_for_GenBank.fasta", sep = "")
+
 
 ```
 
@@ -155,69 +402,13 @@ If only one sequence start with this - I'm not sure how to work this....
 ```
 
 
-Blast to get related ITS sequences 
-```{r}
-library("rentrez")
 
-query <- "(Helotiales[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-webEnvSearch <- entrez_search(db="nuccore", query, retmax=999999)
-
-webEnvSearch
-
-length(webEnvSearch$ids)
-write.table(webEnvSearch$ids, file = paste(genBankPath, "gilist.txt", sep = ""), 
-            append = FALSE, 
-            quote  = FALSE, 
-            row.names = FALSE, 
-            col.names = FALSE)
-
-outfmtCols <- c("qseqid",   "sallacc", "pident", "length", 
-                "mismatch", "gapopen", "qstart", "qend", 
-                "sstart",   "send",    "evalue", "bitscore")
-pathBlastn    <- "/opt/bio/ncbi-blast+/bin/blastn"
-pathBlastDbNt <- "/isilon/biodiversity/reference/ncbi/blastdb/reference/nt/nt"
-maxTargetSeqs <- 200
-dustBlastn    <- "no"
-```
-
-```{r}
-
-prefix <- "A_firstBlast_Single_query"
-
-cmd <- paste(pathBlastn, 
-             " -db ", pathBlastDbNt,
-             " -query ", fastaForGenBankPath,
-             " -max_target_seqs ", maxTargetSeqs,
-             " -gilist ", paste(genBankPath, "gilist.txt", sep = ""),
-             " -dust ", dustBlastn,
-             " -outfmt '6 ", paste(outfmtCols, collapse = " "),
-             " ' -out ", paste(genBankPath, "fasta_for_GenBank.fasta.out", sep = ""), 
-             sep = "")
-
-suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
-
-# The following doesn't work. Output temp files are going to the sharedPath instead of output 
-# specified, error results.
-
-# cmd2 <- paste("/opt/gridengine/bin/linux-x64/qsub -cwd ", 
-#               sharedPathAn, prefix, "/", paste(prefix, "sh", sep = "."), 
-#               sep = "")
-# system(cmd2)    
-# system("/opt/gridengine/bin/linux-x64/qstat")
-```
-
-Clean-up step: Remove the output files while keeping the qsub and bash file:
-```{r}
-
-RemoveQsubTempFiles(sharedPathAn, prefix)
-
-```
 
 Read and consolitdates BLAST outputs
 ```{r}
 library("seqinr")
 
-gbBlastTable <- read.table(paste(genBankPath, "fasta_for_GenBank.fasta.out", sep = ""),
+gbBlastTable <- read.table(paste(genBankPath, "fasta_for_GenBank3.fasta.out", sep = ""),
                              header = FALSE, 
                              stringsAsFactors = FALSE)
 colnames(gbBlastTable) <- c("query_id",   "subject_ids", " %identity", "alignment_length", 
@@ -311,7 +502,7 @@ checkOrder <- data.frame(names(gbDNAstring), dataAgg[,1])
 # THE ORDER OF THESE TWO COLUMNS SHOULD BE THE SAME
 # SEQUENCES WILL BE OFF IF NOT
 write.table(checkOrder, 
-            file = paste(sharedPath, idFolder, "CHECK ORDER OF FASTA file AND BLAST TABLE.csv", 
+            file = paste(sharedPath, idFolder, "CHECK ORDER OF FASTA file AND BLAST TABLE_3.csv", 
                          sep = ""), 
             append = FALSE, 
             sep = ",", 
@@ -461,7 +652,23 @@ write.tree(tree, file = paste(sharedPath, idFolder, "nj_tree.newick", sep = ""),
 
 ```
 
+Now I have the aligned sequences and the newick tree. I can bring these into Geneious to visualize. 
+I had excluded my Lachnellula willkommii ITS concensus sequence that I obtained using the ITSx 
+fungal extractor from when generating the trimmed file and tree because it was so long that I 
+thought it would be problematic. So in Geneious I extracted the sequences as a list from the 
+alignment file "All_files_aligned.fasta". I then made a new list and grouped the ITS concensus
+sequence I had generated with the list of extracted sequences and exported that as a fasta file
+called "All_files_aligned_extraction_210_SequencesGeneious". I want to go through the script again 
+and do the trimming and tree properly now that I have all the sequences. Sequences I don't see 
+captured in the blast hits in the initial GenBank search are:
 
+Glarea lozoyensis (Under Helotiales order? - yes, anamorph)
+Marssonina brunnea (Under Helotiales order? - yes, combination name type, Marssonina=female, male=Gloeosporium brunneum)
+Phialocephala subalpina (although other Phialocephala present)(Under order Helotiales? yes, Basionym, feminine)
+Sclerotinia borealis (Under Helotiales? yes, Basionym, Feminine)
+
+For my mitochondrial annotation and comparison I had used these a s references - I feel that they
+should be in the alignments and tree as well. I will check to see if this works out.
 
 
 
