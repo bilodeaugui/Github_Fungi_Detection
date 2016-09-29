@@ -11,7 +11,7 @@ Getting started in R: Set the working directory
 Add evniroment details to allow qsub submission from within RStudio:
 ```{r}
 Sys.setenv(SGE_ROOT="/opt/gridengine")
-Sys.setenv(SGE_CELL="default")
+# Sys.setenv(SGE_CELL="default")
 Sys.setenv(SGE_ARCH="linux-x64")
 Sys.setenv(SGE_EXECD_PORT="537")
 Sys.setenv(SGE_QMASTER_PORT="536")
@@ -156,7 +156,8 @@ idFastaFiles
 
 If you have more than one fasta file, put all of your files into one bigger fasta file:
 ```{r}
-cmd <- paste(" cat ", paste(sharedPath, idFolder, as.character(idFastaFiles), collapse = " ", sep = ""),
+cmd <- paste(" cat ", paste(sharedPath, idFolder, as.character(idFastaFiles), 
+                            collapse = " ", sep = ""),
              " > ", paste(sharedPath, idFolder, "query.fasta", sep = ""),
              sep = "")
 
@@ -197,7 +198,8 @@ Trim the alignment:
 ```{r}
 library("ape")
 
-align <- read.dna(paste(sharedPath, idFolder, "query_aligned_fasta.fasta", sep = ""), format = "fasta")
+align <- read.dna(paste(sharedPath, idFolder, "query_aligned_fasta.fasta", sep = ""), 
+                  format = "fasta")
 dm    <- dist.dna(align, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
 tree  <- njs(dm)
 maxV  <- max(rowSums(dm), na.rm = TRUE)
@@ -561,11 +563,12 @@ gbNames <- sub(" ", "|", gbNames, ignore.case = FALSE)
 gbNames <- sub(" ", "|", gbNames, ignore.case = FALSE)
 
 
-# *** Over here!!!
-parsedCol <- data.frame(matrix(unlist(strsplit(as.character(gbNames), "\\|")), 
+# *** Over here!!! This doesn't work...
+parsedCol <- data.frame(matrix(unlist(strsplit(as.character(gbNames), "_|-")), 
                                nrow  = length(gbNames), 
                                byrow = T),
                         stringsAsFactors = FALSE)
+
 
 # This is a loop to make extract strain numbers.  There are two approaches, one when there is "strain|isolate|voucher" and one 
 # where the strain number is right after species of f.sp. name.  This may need to be tweaked for different strain codes
@@ -673,7 +676,7 @@ Warning message:
 In max(rowSums(dm), na.rm = TRUE) :
   no non-missing arguments to max; returning -Inf
 ```{r}
-
+library("ape")
 alignmentFile2 <- paste(sharedPath, idFolder, "All_files_aligned.fasta", sep = "")
 align  <- read.dna(alignmentFile2, format = "fasta")
 
@@ -695,11 +698,18 @@ tree <- njs(dm)
 write.tree(tree, file = paste(sharedPath, idFolder, "nj_tree.newick", sep = ""), 
            append = FALSE, digits = 15, tree.names = FALSE)
 
-# Code below doesn't work, looks like it's hanging, where is the input?
-# pdf(file = paste(sharedPath, idFolder, "NJ_bionj_K80_tree_GenBank_and_ID_trimmed.pdf", sep = ""), 
-#     width = 8, height =36 )
-
-
+# Code below doesn't work, because I have no root due to previous line not working.
+pdf(file = paste(sharedPath, idFolder, "NJ_bionj_K80_tree_GenBank_and_ID_trimmed.pdf", sep = ""), 
+    width = 8, height =36 )
+ # "0.5-((nrow(dm)-50)/500)" is a rough equation to remove 0.1 to cex factor for every 50 taxa to keep font size small enough for larger data
+  # if you want to have longer branches, reduce x.lim by 0.1 increments
+  #plot.phylo(type = "phylogram", root(tree, my_root[1], node = NULL, resolve.root = TRUE), font=1, cex = 0.5,  x.lim = 0.7)
+  plot.phylo(type = "phylogram", root(tree, myRoot[1], node = NULL, resolve.root = TRUE), font=1, 
+      #       cex = 0.1,  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/2000), no.margin=TRUE)
+             cex = 0.54 - (sqrt(nrow(dm))/110),  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/2000), no.margin=TRUE)
+#cex = 0.54 - (sqrt(nrow(dm))/70),  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/1200), no.margin=TRUE)
+  title(main="", outer=FALSE, cex.main=1, font.main=2)
+  dev.off()
 ```
 
 ****Over Here!!!
@@ -739,23 +749,7 @@ If only one sequence start with this - I'm not sure how to work this....
 
 
 
-Now I have the aligned sequences and the newick tree. I can bring these into Geneious to visualize. 
-I had excluded my Lachnellula willkommii ITS concensus sequence that I obtained using the ITSx 
-fungal extractor from when generating the trimmed file and tree because it was so long that I 
-thought it would be problematic. So in Geneious I extracted the sequences as a list from the 
-alignment file "All_files_aligned.fasta". I then made a new list and grouped the ITS concensus
-sequence I had generated with the list of extracted sequences and exported that as a fasta file
-called "All_files_aligned_extraction_210_SequencesGeneious". I want to go through the script again 
-and do the trimming and tree properly now that I have all the sequences. Sequences I don't see 
-captured in the blast hits in the initial GenBank search are:
 
-Glarea lozoyensis (Under Helotiales order? - yes, anamorph)
-Marssonina brunnea (Under Helotiales order? - yes, combination name type, Marssonina=female, male=Gloeosporium brunneum)
-Phialocephala subalpina (although other Phialocephala present)(Under order Helotiales? yes, Basionym, feminine)
-Sclerotinia borealis (Under Helotiales? yes, Basionym, Feminine)
-
-For my mitochondrial annotation and comparison I had used these a s references - I feel that they
-should be in the alignments and tree as well. I will check to see if this works out.
 
 
 
