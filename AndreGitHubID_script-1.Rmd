@@ -150,7 +150,7 @@ idFastaFiles <- list.files(path = paste(sharedPath, idFolder, sep = ""),
 Pick the right file(s)
 ```{r}
 idFastaFiles
-idFastaFiles <- idFastaFiles[2] # If I only want this one
+idFastaFiles <- idFastaFiles[6] # If I only want this one
 idFastaFiles
 ```
 
@@ -164,6 +164,9 @@ cmd <- paste(" cat ", paste(sharedPath, idFolder, as.character(idFastaFiles),
 system(cmd)
 
 idFastaFiles <- paste(sharedPath, idFolder, "query.fasta", sep = "")
+
+# If you have only the one file and don't need to combine into a bigger file, set the path manually:
+idFastaFiles <- paste(sharedPath, idFolder, idFastaFiles, sep = "")
 
 ```
 
@@ -307,8 +310,10 @@ Blast to get related ITS sequences
 ```{r}
 library("rentrez")
 
-query <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
-           OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+# query <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
+#            OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+#            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+query <- "(Helotiales[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
 webEnvSearch <- entrez_search(db="nuccore", query, retmax=999999)
 
@@ -339,7 +344,7 @@ xDropGapFinal <- 100
 
 ```{r}
 
-prefix <- "A_firstBlast"
+prefix <- "B_firstBlast"
 
 cmd <- paste(pathBlastn, 
              " -db ", pathBlastDbNt,
@@ -507,7 +512,7 @@ attributes(gbDNAstring)
 Trim
 ```{r}
 
-i <- 8
+#i <- 8
 
 xTrim <- gbDNAstring
 
@@ -564,7 +569,7 @@ gbNames <- sub(" ", "|", gbNames, ignore.case = FALSE)
 
 
 # *** Over here!!! This doesn't work...
-parsedCol <- data.frame(matrix(unlist(strsplit(as.character(gbNames), "_|-")), 
+parsedCol <- data.frame(matrix(unlist(strsplit(as.character(gbNames), "\\|")), 
                                nrow  = length(gbNames), 
                                byrow = T),
                         stringsAsFactors = FALSE)
@@ -644,7 +649,7 @@ to my query sequence. Because of this I know my query is in there.... for what r
 not do this?
 ```{r}
 
-prefix <- "B_alignFasta"
+prefix <- "C_alignFasta"
 
 cmd3 <- paste("/opt/bio/mafft/bin/mafft --auto --reorder ",  
               sharedPath, idFolder, "to_align.fasta > ", 
@@ -682,6 +687,7 @@ align  <- read.dna(alignmentFile2, format = "fasta")
 
 # Raw distance is p-distance with substitution -> d: transition + transversion
 dm   <- dist.dna(align, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
+tree <- njs(dm)
 maxV <- max(rowSums(dm), na.rm = TRUE)
 
 ```
