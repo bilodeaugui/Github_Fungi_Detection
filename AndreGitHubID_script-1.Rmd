@@ -648,16 +648,24 @@ block above. I did see that there is a sequence in the genBank match fasta file 
 to my query sequence. Because of this I know my query is in there.... for what reason should I 
 not do this?
 ```{r}
-
-prefix <- "C_alignFasta"
+# prefix <- "C_alignFasta"
+prefix <- "old2_C_alignFasta"
+prefix <- "old2_Ca_alignFasta_MAFFT_auto"
+prefix <- "old2_Cb_alignFasta_MAFFT_INSI"
+prefix <- "old2_Cc_alignFasta_MAFFT_INSI_max_iterate1000"
+prefix <- "old2_Cd_alignFasta_MAFFT_EINSI_max_iterate1000"
 
 cmd3 <- paste("/opt/bio/mafft/bin/mafft --auto --reorder ",  
-              sharedPath, idFolder, "to_align.fasta > ", 
-              sharedPath, idFolder, "All_files_aligned.fasta", 
+              # sharedPath, idFolder, "to_align.fasta > ", 
+              sharedPath, idFolder, "old2/", "unique_sequences_from_All_files_aligned.fasta > ", 
+              # sharedPath, idFolder, "All_files_aligned.fasta",
+              sharedPath, idFolder, "old2/", "old2_Ca_unique_sequences_All_files_aligned.fasta",
               sep = "")
 
 suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd3, prefix, suffix)
 
+cmd4 <- paste("/opt/bio/mafft/bin/mafft -h ")
+system(cmd4)
 ```
 
 Check if the qsub job is still running:
