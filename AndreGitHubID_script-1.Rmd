@@ -1,7 +1,7 @@
 # André's GitHub Identification Script AndreGitHubID_script-1.Rmd
 ====================================================================================================
 
-Setting things up:
+## Setting things up:
 Installing the required packages for R: This is to be done in the R command line and not in R studio
 source("http://www.Bioconductor.org/biocLite.R") 
 biocLite("BiocUpgrade")
