@@ -169,19 +169,364 @@ queryPath    <- idFastaFiles
 
 #### Read the query sequence into RStudio:
 ```{r}
-query <- readAAStringSet(queryPath, format = "fasta")
+queryFasta <- readAAStringSet(queryPath, format = "fasta")
 ```
 
 *If you want to change the name of the single-query sequence, specify in the following chunk:*
 ```{r}
-names(query) <- "Lawii_ITS1region"
+names(queryFasta) <- "Lawii_ITS1region"
 ```
 
 *The query specified will be used as input to GenBank.*
 ```{r}
-fastaForGenBank <- query
+fastaForGenBank <- queryFasta
 ```
 
+### Blast single query sequence to get related sequences  
+
+#### Generate databases to blast query against:  
+ 
+Perform sets of queries that group:
+1. All of the Helotiales
+2. Only the Lachnum and Lachnellula genus of Helotiales
+3. Only the Lachnellula genus
+4. All of the Helotiales EXCEPT the Lachnellula genus
+5. All fungi EXCEPT Helotiales
+
+```{r}
+library("rentrez")
+
+query1 <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
+            OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+query2 <- "(Lachnum[ORGN] OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+query3 <- "(Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+query4 <- "(Helotiales[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn]
+            OR Lachnellula[ORGN])"
+query5 <- "(Ustilaginomycetes[ORGN] AND (rRNA[gene] OR 26S[gene] OR ribosomal[product]) 
+            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+```
+
+#### Generate the databases as gene ID lists, *gilist.txt*, and write these to the GenBank folder:
+```{r}
+
+webEnvSearch1 <- entrez_search(db="nuccore", query1, retmax=999999)
+webEnvSearch2 <- entrez_search(db="nuccore", query2, retmax=999999)
+webEnvSearch3 <- entrez_search(db="nuccore", query3, retmax=999999)
+webEnvSearch4 <- entrez_search(db="nuccore", query4, retmax=999999)
+webEnvSearch5 <- entrez_search(db="nuccore", query5, retmax=999999)
+
+length(webEnvSearch1$ids)
+length(webEnvSearch2$ids)
+length(webEnvSearch3$ids)
+length(webEnvSearch4$ids)
+length(webEnvSearch5$ids)
+
+write.table(webEnvSearch1$ids, file = paste(genBankPath, "query1_gilist.txt", sep = ""), 
+            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
+write.table(webEnvSearch2$ids, file = paste(genBankPath, "query2_gilist.txt", sep = ""), 
+            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
+write.table(webEnvSearch3$ids, file = paste(genBankPath, "query3_gilist.txt", sep = ""), 
+            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
+write.table(webEnvSearch4$ids, file = paste(genBankPath, "query4_gilist.txt", sep = ""), 
+            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
+write.table(webEnvSearch5$ids, file = paste(genBankPath, "query5_gilist.txt", sep = ""), 
+            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
+```
+
+#### Set the Blast options and output format:  
+```{r}
+pathBlastn    <- "/opt/bio/ncbi-blast+/bin/blastn"
+pathBlastDbNt <- "/isilon/biodiversity/reference/ncbi/blastdb/reference/nt/nt"
+outfmtCols    <- c("qseqid",   "sallacc", "pident", "length", 
+                   "mismatch", "gapopen", "qstart", "qend", 
+                   "sstart",   "send",    "evalue", "bitscore")
+maxTargetSeqs <- 200
+dustBlastn    <- "no"
+gapOpen       <- 1
+gapExtend     <- 1
+xDropGap      <- 30
+xDropGapFinal <- 100
+```
+
+#### Generate the bash scripts that will perform blasts of the query against each of the query databases made.
+```{r}
+giLists <- list.files(path = paste(genBankPath, sep = ""), 
+                      pattern   = "\\gilist.txt$", 
+                      recursive = FALSE)
+metadata <- data.frame(giLists)
+metadata$queryDataBase <- sub("_gilist.txt", "", metadata$giLists, ignore.case = FALSE)
+
+prefix <- "A_firstBlast"
+
+cmd <- with(metadata,
+            paste(pathBlastn,
+                  " -db ", pathBlastDbNt,
+                  " -query ", queryPath,
+                  " -max_target_seqs ", maxTargetSeqs,
+                  " -gilist ", paste(genBankPath, giLists, sep = ""),
+                  " -gapopen ", gapOpen,
+                  " -gapextend ", gapExtend,
+                  " -xdrop_gap ", xDropGap,
+                  " -xdrop_gap_final ", xDropGapFinal,
+                  " -dust ", dustBlastn,
+                  " -outfmt '6 ", paste(outfmtCols, collapse = " "),
+                  " ' -out ", paste(genBankPath, queryDataBase, "_GenBank.fasta.out", 
+                                    sep = ""),
+                  sep = ""))
+
+
+suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
+```
+
+#### Record the name of the blast output files in the metadata table:
+```{r}
+for(k in 1:nrow(metadata)){
+    metadata$BlastGenBank_output <- paste(metadata$queryDataBase, "_GenBank.fasta.out", sep = "")
+}
+```
+*Check if the qsub job is still running:*
+```{r}
+system("/opt/gridengine/bin/linux-x64/qstat")
+```
+
+*Clean-up step: Remove the output files while keeping the qsub and bash file:*
+```{r}
+RemoveQsubTempFiles(sharedPathAn, prefix)
+```
+
+#### Read and consolitdate BLAST outputs. I would like to fix this so that I can loop this for all the Blast output tables.
+```{r}
+library("seqinr")
+
+# for(k in 1:nrow(metadata)){
+#     gbBlastaTable[k] <- read.table(paste(genBankPath, metadata$BlastGenBank_output, sep = ""),
+#                                    header = FALSE,
+#                                    stringsAsFactors = FALSE)
+# }
+
+i <- 1   # This is for our query1 database for BLAST 
+
+gbBlastTable <- read.table(paste(genBankPath, metadata$BlastGenBank_output[i], sep = ""),
+                           header = FALSE,
+                           stringsAsFactors = FALSE)
+
+colnames(gbBlastTable) <- c("query_id",   "subject_ids", " %identity", "alignment_length", 
+                            "mismatches", "gap_opens",   "q_start",    " q_end", 
+                            "s_start",    "s_end",       "evalue",     " bit_score")
+# to break multiple gi numbers/ accessions from NCBI table
+multiGI <- cbind(gregexpr(";", gbBlastTable$subject_ids,
+                          ignore.case = FALSE, 
+                          perl        = FALSE, 
+                          fixed       = FALSE, 
+                          useBytes    = FALSE))
+
+newGbBlastTable <- data.frame()
+for(k in 1:nrow(gbBlastTable)) { 
+    if (unlist(multiGI[k])[1] != -1){ 
+        parsedNames <- strsplit(as.character(gbBlastTable$subject_ids[k]), ";")[[1]]  # [[1]] to show first element 
+        tempTable   <- do.call("rbind", replicate((length(unlist(multiGI[k])) + 1), 
+                                                   gbBlastTable[k,], simplify = FALSE)) 
+        tempTable$subject_ids <- parsedNames 
+        newGbBlastTable <- rbind(newGbBlastTable, tempTable) 
+        } else {
+            newGbBlastTable <-  rbind(newGbBlastTable, gbBlastTable[k,]) 
+            } 
+    }
+
+gbBlastTable <- newGbBlastTable 
+summary(gbBlastTable)
+colnames(gbBlastTable)[2] <- "GB_accession"
+uniqueGB <- unique(gbBlastTable$GB_accession)
+```
+
+
+```{r}
+library("ape")
+sequences <- read.GenBank(uniqueGB, 
+                          seq.names = uniqueGB, 
+                          species.names = TRUE,
+                          gene.names    = FALSE, 
+                          as.character  = TRUE)
+
+sequenceOrder <- sequences[order(names(sequences))]
+names(sequenceOrder)[1]
+attr(sequences, "species")
+
+fullNames <- data.frame(attr(sequences, "species"), names(sequences), stringsAsFactors = FALSE)
+fullNames$SpStrain <-  do.call(paste, c(fullNames[1:2], sep = "_"))
+fullNamesOrdered   <- fullNames[order(fullNames$names.sequences.),] 
+nrow(fullNamesOrdered)
+```
+
+```{r}
+library(Biostrings)
+
+gbDNAstring <- DNAStringSet()
+
+for(k in 1:length(sequenceOrder)) { 
+    temp <- DNAStringSet(paste(sequenceOrder[[k]], collapse = "")) 
+    names(temp)  <- fullNamesOrdered$SpStrain[k] 
+    gbDNAstring  <- c(gbDNAstring, temp)
+} 
+
+# Creates a +/- column for orientation of sequences
+gbBlastTable$orientation <- sign(gbBlastTable$s_end - gbBlastTable$s_start)
+gbBlastTable$length      <- abs(gbBlastTable$s_end - gbBlastTable$s_start)
+gbBlastTable$query_id    <- as.character(gbBlastTable$query_id)
+
+# Put together data from multiple hits on single line
+dataAgg <- aggregate(gbBlastTable[c(2:14)], 
+                     by  = list(gbBlastTable$GB_accession, gbBlastTable$GB_accession),
+                     FUN = c)
+
+# find min and max and sense of hits
+for(k in 1:nrow(dataAgg)) {
+  dataAgg$min[k]   <- min(unlist(c(dataAgg$s_start[k],dataAgg$s_end[k])))
+  dataAgg$max[k]   <- max(unlist(c(dataAgg$s_start[k],dataAgg$s_end[k])))
+  dataAgg$sense[k] <- mean(unlist(c(dataAgg$orientation[k]))) 
+}
+
+
+# add a column with bp (width) of sequences.
+dataAgg$bp    <- width(gbDNAstring)
+dataAgg$width <- dataAgg$max - dataAgg$min
+dataAgg$diff  <- dataAgg$width - dataAgg$max
+dataAgg       <- dataAgg[order(as.character(dataAgg$Group.1)), ] 
+
+# to make sure that name order are the same
+checkOrder <- data.frame(names(gbDNAstring), dataAgg[,1])
+
+# Very Important
+# THE ORDER OF THESE TWO COLUMNS SHOULD BE THE SAME
+# SEQUENCES WILL BE OFF IF NOT
+write.table(checkOrder, 
+            file = paste(sharedPath, idFolder, 
+                         metadata$queryDataBase[i], "_CHECK_ORDER_OF_FASTA_file_AND_BLAST_TABLE.csv", 
+                         sep = ""), 
+            append = FALSE, 
+            sep = ",", 
+            col.names = NA)
+```
+
+From here: 
+http://stackoverflow.com/questions/13545547/how-to-write-a-data-frame-with-one-column-a-list-to-a-file
+```{r}
+library("xlsx")
+
+dataset2 <- dataAgg # make a copy just to be on the safe side
+dataset2[sapply(dataset2, is.list)] <- 
+    sapply(dataset2[sapply(dataset2, is.list)], 
+           function(x)sapply(x, function(y) paste(unlist(y), collapse = ", ")))
+
+write.xlsx(dataset2, file = paste(sharedPath, idFolder, 
+                                  metadata$queryDataBase[i], "_to_check_BLAST_results_table.xlsx", 
+                                  sep = ""), 
+           sheetName = "Sheet1", 
+           col.names = TRUE, 
+           row.names = TRUE, 
+           append    = FALSE, 
+           showNA    = TRUE)
+
+attributes(gbDNAstring)
+```
+
+#### Trim
+```{r}
+k <- 8 # why does Andre have this here?
+
+xTrim <- gbDNAstring
+
+for(k in 1:length(xTrim)) { 
+    if (dataAgg$sense[k] == 1) { 
+        xTrim[k] <- DNAStringSet(xTrim[k], start = dataAgg$min[k], 
+                                 end = dataAgg$max[k], width = NA, use.names = TRUE) 
+        print(c(k, dataAgg$sense[k])) 
+        } else { 
+            if (dataAgg$sense[k] == -1) {  
+                xTrim[k] <- reverseComplement(DNAStringSet(xTrim[k], start = dataAgg$min[k], 
+                                                           end = dataAgg$max[k], width = NA, 
+                                                           use.names = TRUE)) 
+                print(c(k, dataAgg$sense[k])) 
+                } else { 
+                    xTrim[k] <- DNAStringSet("NNNN") 
+                    print(c(k, "NNNN")) 
+                    } 
+            } 
+    }
+
+# Show outliers
+meanLength  <- mean(width(xTrim), trim = 0.05)
+meanLength
+queryLength <- mean(nchar(fastaForGenBank))
+queryLength
+```
+
+#### Calculate a confidence interval based on all sequences
+```{r}
+library("chemometrics")
+
+confInterv <- 2*sd_trim(width(xTrim), trim=0.05, const=FALSE)
+
+# Show the sequences that will be removed
+toRemove <- xTrim[(width(xTrim) < queryLength - 1*confInterv | width(xTrim) > queryLength + 2*confInterv), ]
+# toRemove <- xTrim[(width(xTrim) < meanLength - 10*confInterv | width(xTrim) > meanLength + 10*confInterv), ]
+
+length(toRemove)
+names(toRemove)
+
+# Write file with removed sequences
+writeXStringSet(toRemove, file = paste(sharedPath, idFolder, 
+                                       metadata$queryDataBase[i], "_GB_removed.fasta", sep = ""), 
+                append = FALSE, format = "fasta") 
+
+# Create the file without the outliers
+xtrimNoOutliers <- xTrim[!names(xTrim) %in% names(toRemove)]
+length(xtrimNoOutliers)
+names(xtrimNoOutliers)
+
+# Write fasta file of trimmed sequences
+writeXStringSet(xtrimNoOutliers, 
+                file = paste(sharedPath, idFolder, 
+                             metadata$queryDataBase[i], "_GB_csv_extracted.fasta", sep = ""), 
+                append = FALSE, format = "fasta") 
+
+# Concatenate the query fasta file and the fasta file of trimmed sequences to a new file:
+cmd2 <- paste("cat ",  
+              queryPath, " ",
+              sharedPath, idFolder, metadata$queryDataBase[i], "_GB_csv_extracted.fasta > ",  
+              sharedPath, idFolder, metadata$queryDataBase[i], "_to_align.fasta", 
+              sep = "")
+system(cmd2)
+```
+
+### Do MAFFT alignement of sequences:  
+```{r}
+prefix <- "B_alignFasta"
+
+cmd3 <- paste("/opt/bio/mafft/bin/mafft --reorder --maxiterate 1000 --localpair --thread 6 ",  
+              sharedPath, idFolder, metadata$queryDataBase[i], "_to_align.fasta > ", 
+              sharedPath, idFolder, metadata$queryDataBase[i], "_All_files_aligned.fasta",
+              sep = "")
+
+suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd3, prefix, suffix)
+
+cmd4 <- paste("/opt/bio/mafft/bin/mafft -h ")
+system(cmd4)
+```
+
+*Check if the qsub job is still running:*
+```{r}
+system("/opt/gridengine/bin/linux-x64/qstat")
+```
+
+*Clean-up step: Remove the output files while keeping the qsub and bash file:*
+```{r}
+RemoveQsubTempFiles(sharedPathAn, prefix)
+```
 
 ### Option B: >1 Starting sequences
 1. Find the fasta file(s)
@@ -343,239 +688,6 @@ fastaForGenBankPath <- paste(genBankPath, "fasta_for_GenBank.fasta", sep = "")
 
 ```
 
-Blast to get related ITS sequences 
-```{r}
-library("rentrez")
-
-# query <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
-#            OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-#            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-query <- "(Helotiales[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-           NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-webEnvSearch <- entrez_search(db="nuccore", query, retmax=999999)
-
-webEnvSearch
-
-length(webEnvSearch$ids)
-
-write.table(webEnvSearch$ids, file = paste(genBankPath, "gilist.txt", sep = ""), 
-            append = FALSE, 
-            quote  = FALSE, 
-            row.names = FALSE, 
-            col.names = FALSE)
-
-outfmtCols <- c("qseqid",   "sallacc", "pident", "length", 
-                "mismatch", "gapopen", "qstart", "qend", 
-                "sstart",   "send",    "evalue", "bitscore")
-pathBlastn    <- "/opt/bio/ncbi-blast+/bin/blastn"
-pathBlastDbNt <- "/isilon/biodiversity/reference/ncbi/blastdb/reference/nt/nt"
-maxTargetSeqs <- 400
-dustBlastn    <- "no"
-gapOpen       <- 1
-gapExtend     <- 1
-xDropGap      <- 30
-xDropGapFinal <- 100
-
-```
-
-
-```{r}
-
-prefix <- "B_firstBlast"
-
-cmd <- paste(pathBlastn, 
-             " -db ", pathBlastDbNt,
-             " -query ", fastaForGenBankPath,
-             " -max_target_seqs ", maxTargetSeqs,
-             " -gilist ", paste(genBankPath, "gilist.txt", sep = ""),
-             " -gapopen ", gapOpen,
-             " -gapextend ", gapExtend,
-             " -xdrop_gap ", xDropGap,
-             " -xdrop_gap_final ", xDropGapFinal,
-             " -dust ", dustBlastn,
-             " -outfmt '6 ", paste(outfmtCols, collapse = " "),
-             " ' -out ", paste(genBankPath, "fasta_for_GenBank.fasta.out", sep = ""), 
-             sep = "")
-
-
-suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
-```
-
-Check if the qsub job is still running:
-```{r}
-
-system("/opt/gridengine/bin/linux-x64/qstat")
-
-```
-
-
-Clean-up step: Remove the output files while keeping the qsub and bash file:
-```{r}
-
-RemoveQsubTempFiles(sharedPathAn, prefix)
-
-```
-
-Read and consolitdates BLAST outputs
-```{r}
-library("seqinr")
-
-gbBlastTable <- read.table(paste(genBankPath, "fasta_for_GenBank.fasta.out", sep = ""), 
-                           header = FALSE, 
-                           stringsAsFactors = FALSE)
-
-colnames(gbBlastTable) <- c("query_id",   "subject_ids", " %identity", "alignment_length", 
-                            "mismatches", "gap_opens",   "q_start",    " q_end", 
-                            "s_start",    "s_end",       "evalue",     " bit_score")
-
-# to break multiple gi numbers/ accessions from NCBI table
-multiGI <- cbind(gregexpr(";", gbBlastTable$subject_ids, 
-                          ignore.case = FALSE, 
-                          perl        = FALSE, 
-                          fixed       = FALSE, 
-                          useBytes    = FALSE))
-
-newGbBlastTable <- data.frame()
-
-for(i in 1:nrow(gbBlastTable)) { 
-    if (unlist(multiGI[i])[1] != -1) { 
-        parsedNames <- strsplit(as.character(gbBlastTable$subject_ids[i]), ";")[[1]]  # [[1]] to show first element 
-        tempTable   <- do.call("rbind", replicate((length(unlist(multiGI[i])) + 1), 
-                                                   gbBlastTable[i,], simplify = FALSE)) 
-        tempTable$subject_ids <- parsedNames 
-        newGbBlastTable <- rbind(newGbBlastTable, tempTable) 
-        } else { 
-            newGbBlastTable <-  rbind(newGbBlastTable, gbBlastTable[i,]) 
-            } 
-    }
-
-gbBlastTable <- newGbBlastTable 
-summary(gbBlastTable)
-colnames(gbBlastTable)[2] <- "GB_accession"
-uniqueGB <- unique(gbBlastTable$GB_accession)
-```
-
-
-```{r}
-library("ape")
-sequences <- read.GenBank(uniqueGB, 
-                          seq.names = uniqueGB, 
-                          species.names = TRUE,
-                          gene.names    = FALSE, 
-                          as.character  = TRUE)
-
-sequenceOrder <- sequences[order(names(sequences))]
-names(sequenceOrder)[1]
-attr(sequences, "species")
-
-fullNames <- data.frame(attr(sequences, "species"), names(sequences), stringsAsFactors = FALSE)
-fullNames$SpStrain <-  do.call(paste, c(fullNames[1:2], sep = "_"))
-fullNamesOrdered   <- fullNames[order(fullNames$names.sequences.),] 
-nrow(fullNamesOrdered)
-
-```
-
-
-```{r}
-library(Biostrings)
-
-gbDNAstring <- DNAStringSet()
-
-for(i in 1:length(sequenceOrder)) { 
-    temp <- DNAStringSet(paste(sequenceOrder[[i]], collapse = "")) 
-    names(temp)  <- fullNamesOrdered$SpStrain[i] 
-    gbDNAstring  <- c(gbDNAstring, temp)
-} 
-
-# Creates a +/- column for orientation of sequences
-gbBlastTable$orientation <- sign(gbBlastTable$s_end - gbBlastTable$s_start)
-gbBlastTable$length      <- abs(gbBlastTable$s_end - gbBlastTable$s_start)
-gbBlastTable$query_id    <- as.character(gbBlastTable$query_id)
-
-# Put together data from multiple hits on single line
-dataAgg <- aggregate(gbBlastTable[c(2:14)], 
-                     by  = list(gbBlastTable$GB_accession, gbBlastTable$GB_accession),
-                     FUN = c)
-
-# find min and max and sense of hits
-for(i in 1:nrow(dataAgg)) {
-  dataAgg$min[i] <- min(unlist(c(dataAgg$s_start[i],dataAgg$s_end[i])))
-  dataAgg$max[i] <- max(unlist(c(dataAgg$s_start[i],dataAgg$s_end[i])))
-  dataAgg$sense[i] <- mean(unlist(c(dataAgg$orientation[i]))) 
-}
-
-
-# add a column with bp (width) of sequences.
-dataAgg$bp    <- width(gbDNAstring)
-dataAgg$width <- dataAgg$max - dataAgg$min
-dataAgg$diff  <- dataAgg$width - dataAgg$max
-dataAgg       <- dataAgg[order(as.character(dataAgg$Group.1)), ] 
-
-# to make sure that name order are the same
-checkOrder <- data.frame(names(gbDNAstring), dataAgg[,1])
-
-# Very Important
-# THE ORDER OF THESE TWO COLUMNS SHOULD BE THE SAME
-# SEQUENCES WILL BE OFF IF NOT
-write.table(checkOrder, 
-            file = paste(sharedPath, idFolder, "CHECK ORDER OF FASTA file AND BLAST TABLE.csv", 
-                         sep = ""), 
-            append = FALSE, 
-            sep = ",", 
-            col.names = NA)
-```
-
-From here: 
-http://stackoverflow.com/questions/13545547/how-to-write-a-data-frame-with-one-column-a-list-to-a-file
-```{r}
-library("xlsx")
-
-dataset2 <- dataAgg # make a copy just to be on the safe side
-dataset2[sapply(dataset2, is.list)] <- 
-    sapply(dataset2[sapply(dataset2, is.list)], 
-           function(x)sapply(x, function(y) paste(unlist(y), collapse = ", ")))
-
-write.xlsx(dataset2, file = paste(sharedPath, idFolder, "/to check BLAST results table.xlsx", sep = ""), 
-           sheetName = "Sheet1", 
-           col.names = TRUE, 
-           row.names = TRUE, 
-           append    = FALSE, 
-           showNA    = TRUE)
-
-attributes(gbDNAstring)
-
-```
-
-Trim
-```{r}
-
-#i <- 8
-
-xTrim <- gbDNAstring
-
-for(i in 1:length(xTrim)) { 
-    if (dataAgg$sense[i] == 1) { 
-        xTrim[i] <- DNAStringSet(xTrim[i], start = dataAgg$min[i], 
-                                 end = dataAgg$max[i], width = NA, use.names = TRUE) 
-        print(c(i, dataAgg$sense[i])) 
-        } else { 
-            if (dataAgg$sense[i] == -1) {  
-                xTrim[i] <- reverseComplement(DNAStringSet(xTrim[i], start = dataAgg$min[i], 
-                                                           end = dataAgg$max[i], width = NA, 
-                                                           use.names = TRUE)) 
-                print(c(i, dataAgg$sense[i])) 
-                } else { 
-                    xTrim[i] <- DNAStringSet("NNNN") 
-                    print(c(i, "NNNN")) 
-                    } 
-            } 
-    }
-
-# Show outliers
-meanLength  <- mean(width(xTrim), trim = 0.05)
-queryLength <- mean(nchar(fastaForGenBank))
-
-```
 
 This module is to fix the GenBank output
 ```{r}
@@ -585,18 +697,18 @@ library("stringr")
 gbNames <- names(xTrim)
 
 # This is a loop to make some taxonomy glitches replacement to make the parsing with space accurate
-   for(i in 1:length(gbNames)) {
+   for(k in 1:length(gbNames)) {
      # This is to replace abbreviations like "R.secalis" in GenBank
        regexp1 <- " ([[:upper:]]{1})(\\.)([[:lower:]]+) "
-       replacement1 <- str_extract(gbNames[i],regexp1)
+       replacement1 <- str_extract(gbNames[k],regexp1)
        replacement1 <- sub("\\.", " ", replacement1, ignore.case = FALSE)
-       gbNames[i] <- sub(" ([[:upper:]]{1})(\\.)([[:lower:]]+) ", replacement1, gbNames[i], ignore.case = FALSE)
+       gbNames[k] <- sub(" ([[:upper:]]{1})(\\.)([[:lower:]]+) ", replacement1, gbNames[k], ignore.case = FALSE)
     # This is to replace " f. sp. " for "_f._sp._"   
     #   string <- "Marssonina brunnea f. sp. multigermtubi MB_m1 tubulin beta chain (MBM_05801), mRNA"
        regexp2 <- " ([[:lower:]]+) f. sp. (\\'?)([[:lower:]]+)(\\'?) "
-       replacement2 <- str_extract(gbNames[i],regexp2)
+       replacement2 <- str_extract(gbNames[k],regexp2)
        replacement2 <- sub(" f. sp. ", "_.f._sp._", replacement2, ignore.case = FALSE)
-       gbNames[i] <- sub(" ([[:lower:]]+) f. sp. (\\'?)([[:lower:]]+)(\\'?) ", replacement2, gbNames[i], ignore.case = FALSE)
+       gbNames[k] <- sub(" ([[:lower:]]+) f. sp. (\\'?)([[:lower:]]+)(\\'?) ", replacement2, gbNames[k], ignore.case = FALSE)
    }
   
 
@@ -641,84 +753,7 @@ writeXStringSet(x_trim, file="new_names.fasta", append=FALSE, format="fasta")
 ```
 
 
-Calculate a confidence interval based on all sequences
-```{r}
-library("chemometrics")
-
-confInterv <- 2*sd_trim(width(xTrim), trim=0.05, const=FALSE)
-
-# Show the sequences that will be removed
-toRemove <- xTrim[(width(xTrim) < queryLength - 1*confInterv | width(xTrim) > queryLength + 2*confInterv), ]
-toRemove <- xTrim[(width(xTrim) < meanLength - 10*confInterv | width(xTrim) > meanLength + 10*confInterv), ]
-
-length(toRemove)
-names(toRemove)
-
-# Write file with removed sequences
-writeXStringSet(toRemove, file = paste(sharedPath, idFolder, "GB_removed.fasta", sep = ""), 
-                append = FALSE, format = "fasta") 
-
-# Create the file without the outliers
-xtrimNoOutliers <- xTrim[!names(xTrim) %in% names(toRemove)]
-length(xtrimNoOutliers)
-
-# Write fasta file of trimmed sequences
-writeXStringSet(xtrimNoOutliers, 
-                file = paste(sharedPath, idFolder, "GB_csv_extracted.fasta", sep = ""), 
-                append = FALSE, format = "fasta") 
-
-
-cmd2 <- paste("cat ",  
-              sharedPath, idFolder, "query_aligned_fasta.fasta", " ",
-              sharedPath, idFolder, "GB_csv_extracted.fasta > ",  
-              sharedPath, idFolder, "to_align.fasta", 
-              sep = "")
-system(cmd2)
-```
-
-Do MAFFT alignement of sequences
-
-Previous Note (not for this round for chunk):
-Here I left out my query sequence because it is over 3000 bp, while the mean length of all the 
-hits is 1300 bp. Keeping my query results in losing over 95% of the sequences in the toRemove 
-block above. I did see that there is a sequence in the genBank match fasta file with 100% similarity 
-to my query sequence. Because of this I know my query is in there.... for what reason should I 
-not do this?
-```{r}
-# prefix <- "C_alignFasta"
-prefix <- "old2_C_alignFasta"
-prefix <- "old2_Ca_alignFasta_MAFFT_auto"
-prefix <- "old2_Cb_alignFasta_MAFFT_INSI"
-prefix <- "old2_Cc_alignFasta_MAFFT_INSI_max_iterate1000"
-prefix <- "old2_Cd_alignFasta_MAFFT_EINSI_max_iterate1000"
-
-cmd3 <- paste("/opt/bio/mafft/bin/mafft --auto --reorder ",  
-              # sharedPath, idFolder, "to_align.fasta > ", 
-              sharedPath, idFolder, "old2/", "unique_sequences_from_All_files_aligned.fasta > ", 
-              # sharedPath, idFolder, "All_files_aligned.fasta",
-              sharedPath, idFolder, "old2/", "old2_Ca_unique_sequences_All_files_aligned.fasta",
-              sep = "")
-
-suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd3, prefix, suffix)
-
-cmd4 <- paste("/opt/bio/mafft/bin/mafft -h ")
-system(cmd4)
-```
-
-Check if the qsub job is still running:
-```{r}
-
-system("/opt/gridengine/bin/linux-x64/qstat")
-
-```
-
-Clean-up step: Remove the output files while keeping the qsub and bash file:
-```{r}
-
-RemoveQsubTempFiles(sharedPathAn, prefix)
-
-```
-
+####################################################################################################
 
 **** Error over here - when I run line: 
 maxV <- max(rowSums(dm), na.rm = TRUE)
