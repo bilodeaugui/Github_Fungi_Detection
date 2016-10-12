@@ -136,7 +136,7 @@ variable.
 ```{r}
 querySingleFasta <- "query.fasta"
 ```
-   2\. Provide the path to the query. Default is to place the query file in the idFolder and don't change
+&nbsp;&nbsp;&nbsp;&nbsp;2\. Provide the path to the query. Default is to place the query file in the idFolder and don't change
 anything in the following chunk.
 ```{r}
 queryPath <- paste(sharedPath, idFolder, querySingleFasta, sep = "")
@@ -150,7 +150,7 @@ idFastaFiles <- list.files(path = paste(sharedPath, idFolder, sep = ""),
                            pattern = "\\.fas$|\\.fasta$", 
                            recursive = FALSE)
 ```
-   2\. Pick the right file(s)
+&nbsp;&nbsp;&nbsp;&nbsp;2\. Pick the right file(s)
 ```{r}
 idFastaFiles
 idFastaFiles <- idFastaFiles[1] # If I only want this one
@@ -158,7 +158,7 @@ idFastaFiles
 querySingleFasta <- idFastaFiles
 ```
 
-   3\. Set the path manually:
+&nbsp;&nbsp;&nbsp;&nbsp;3\. Set the path manually:
 ```{r}
 idFastaFiles <- paste(sharedPath, idFolder, idFastaFiles, sep = "")
 queryPath    <- idFastaFiles
@@ -188,13 +188,13 @@ idFastaFiles <- list.files(path = paste(sharedPath, idFolder, sep = ""),
                            pattern = "\\.fas$|\\.fasta$", 
                            recursive = FALSE)
 ```
-   2\. Pick the right file(s)
+&nbsp;&nbsp;&nbsp;&nbsp;2\. Pick the right file(s)
 ```{r}
 idFastaFiles
 idFastaFiles <- idFastaFiles[6] # If I only want this one
 idFastaFiles
 ```
-   3\. If you have more than one fasta file, put all of your files into one bigger fasta file:
+&nbsp;&nbsp;&nbsp;&nbsp;3\. If you have more than one fasta file, put all of your files into one bigger fasta file:
 ```{r}
 cmd <- paste(" cat ", paste(sharedPath, idFolder, as.character(idFastaFiles), 
                             collapse = " ", sep = ""),
@@ -206,7 +206,7 @@ system(cmd)
 idFastaFiles <- paste(sharedPath, idFolder, "query.fasta", sep = "")
 ```
 
-   4\. Do a MAFFT alignment, linsi coomand:
+&nbsp;&nbsp;&nbsp;&nbsp;4\. Do a MAFFT alignment, linsi coomand:
 ```{r}
 
 prefix    <- "A_original_query_First_MAFFT_linsi_Alignment"
@@ -232,7 +232,7 @@ system("/opt/gridengine/bin/linux-x64/qstat")
 RemoveQsubTempFiles(sharedPathAn, prefix)
 ```
 
-   5\. Trim the alignment:
+&nbsp;&nbsp;&nbsp;&nbsp;5\. Trim the alignment:
 ```{r}
 library("ape")
 
