@@ -141,8 +141,9 @@ anything in the following chunk.
 ```{r}
 queryPath <- paste(sharedPath, idFolder, querySingleFasta, sep = "")
 ```
-
+  
 OR,  
+
 to see the fasta files in the idFolder and choose a specific one interactively:  
 1. List the fasta files in the idFolder:
 ```{r}
