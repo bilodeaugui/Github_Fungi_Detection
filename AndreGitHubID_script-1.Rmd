@@ -308,7 +308,7 @@ library("seqinr")
 #                                    stringsAsFactors = FALSE)
 # }
 
-i <- 1   # This is for our query1 database for BLAST 
+i <- 5   # This is for our query1 database for BLAST 
 
 gbBlastTable <- read.table(paste(genBankPath, metadata$BlastGenBank_output[i], sep = ""),
                            header = FALSE,
@@ -466,6 +466,8 @@ queryLength
 ```
 
 #### Calculate a confidence interval based on all sequences
+
+*Note: I did not finish the following chunk for query4, I lost all my sequences with the following settings for that one.*
 ```{r}
 library("chemometrics")
 
@@ -513,9 +515,6 @@ cmd3 <- paste("/opt/bio/mafft/bin/mafft --reorder --maxiterate 1000 --localpair 
               sep = "")
 
 suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd3, prefix, suffix)
-
-cmd4 <- paste("/opt/bio/mafft/bin/mafft -h ")
-system(cmd4)
 ```
 
 *Check if the qsub job is still running:*
@@ -527,6 +526,49 @@ system("/opt/gridengine/bin/linux-x64/qstat")
 ```{r}
 RemoveQsubTempFiles(sharedPathAn, prefix)
 ```
+
+
+```{r}
+library("ape")
+alignmentFile <- paste(sharedPath, idFolder, 
+                       metadata$queryDataBase[i], "_All_files_aligned.fasta", sep = "")
+align  <- read.dna(alignmentFile, format = "fasta")
+
+# Raw distance is p-distance with substitution -> d: transition + transversion
+dm   <- dist.dna(align, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
+tree <- njs(dm)
+maxV <- max(rowSums(dm), na.rm = TRUE)
+```
+
+This is to get the root of the tree with the most distant species and generate nj tree
+```{r}
+
+myRoot <- which(rowSums(dm) == maxV)
+max(dm, na.rm = TRUE)
+nrow(dm)
+
+
+tree <- njs(dm)
+write.tree(tree, file = paste(sharedPath, idFolder, 
+                              metadata$queryDataBase[i], "_nj_tree.newick", sep = ""), 
+           append = FALSE, digits = 15, tree.names = FALSE)
+
+# Code below doesn't work, because I have no root due to previous line not working.
+pdf(file = paste(sharedPath, idFolder, 
+                 metadata$queryDataBase[i], "_NJ_bionj_K80_tree_GenBank_and_ID_trimmed.pdf", 
+                 sep = ""), 
+    width = 8, height =36 )
+ # "0.5-((nrow(dm)-50)/500)" is a rough equation to remove 0.1 to cex factor for every 50 taxa to keep font size small enough for larger data
+  # if you want to have longer branches, reduce x.lim by 0.1 increments
+  #plot.phylo(type = "phylogram", root(tree, my_root[1], node = NULL, resolve.root = TRUE), font=1, cex = 0.5,  x.lim = 0.7)
+  plot.phylo(type = "phylogram", root(tree, myRoot[1], node = NULL, resolve.root = TRUE), font=1, 
+      #       cex = 0.1,  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/2000), no.margin=TRUE)
+             cex = 0.54 - (sqrt(nrow(dm))/110),  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/2000), no.margin=TRUE)
+#cex = 0.54 - (sqrt(nrow(dm))/70),  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/1200), no.margin=TRUE)
+  title(main="", outer=FALSE, cex.main=1, font.main=2)
+  dev.off()
+```
+
 
 ### Option B: >1 Starting sequences
 1. Find the fasta file(s)
@@ -553,7 +595,7 @@ system(cmd)
 idFastaFiles <- paste(sharedPath, idFolder, "query.fasta", sep = "")
 ```
 
-&nbsp;&nbsp;&nbsp;&nbsp;4\. Do a MAFFT alignment, linsi coomand:
+&nbsp;&nbsp;&nbsp;&nbsp;4\. Do a MAFFT alignment, linsi command:
 ```{r}
 
 prefix    <- "A_original_query_First_MAFFT_linsi_Alignment"
@@ -747,99 +789,7 @@ parsedCol$species <- gsub("_", "", parsedCol$X7, ignore.case = FALSE)
 names(x_trim) <- paste(parsedCol$X6,"_",parsedCol$species,"_",parsedCol$GB,"_strain(",parsedCol$strain2,")", sep = "")
 
 writeXStringSet(x_trim, file="new_names.fasta", append=FALSE, format="fasta") 
-
-
-
 ```
-
-
-####################################################################################################
-
-**** Error over here - when I run line: 
-maxV <- max(rowSums(dm), na.rm = TRUE)
-Warning message: 
-In max(rowSums(dm), na.rm = TRUE) :
-  no non-missing arguments to max; returning -Inf
-```{r}
-library("ape")
-alignmentFile2 <- paste(sharedPath, idFolder, "All_files_aligned.fasta", sep = "")
-align  <- read.dna(alignmentFile2, format = "fasta")
-
-# Raw distance is p-distance with substitution -> d: transition + transversion
-dm   <- dist.dna(align, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
-tree <- njs(dm)
-maxV <- max(rowSums(dm), na.rm = TRUE)
-
-```
-
-This is to get the root of the tree with the most distant species and generate nj tree
-```{r}
-
-myRoot <- which(rowSums(dm) == maxV)
-max(dm, na.rm = TRUE)
-nrow(dm)
-
-
-tree <- njs(dm)
-write.tree(tree, file = paste(sharedPath, idFolder, "nj_tree.newick", sep = ""), 
-           append = FALSE, digits = 15, tree.names = FALSE)
-
-# Code below doesn't work, because I have no root due to previous line not working.
-pdf(file = paste(sharedPath, idFolder, "NJ_bionj_K80_tree_GenBank_and_ID_trimmed.pdf", sep = ""), 
-    width = 8, height =36 )
- # "0.5-((nrow(dm)-50)/500)" is a rough equation to remove 0.1 to cex factor for every 50 taxa to keep font size small enough for larger data
-  # if you want to have longer branches, reduce x.lim by 0.1 increments
-  #plot.phylo(type = "phylogram", root(tree, my_root[1], node = NULL, resolve.root = TRUE), font=1, cex = 0.5,  x.lim = 0.7)
-  plot.phylo(type = "phylogram", root(tree, myRoot[1], node = NULL, resolve.root = TRUE), font=1, 
-      #       cex = 0.1,  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/2000), no.margin=TRUE)
-             cex = 0.54 - (sqrt(nrow(dm))/110),  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/2000), no.margin=TRUE)
-#cex = 0.54 - (sqrt(nrow(dm))/70),  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/1200), no.margin=TRUE)
-  title(main="", outer=FALSE, cex.main=1, font.main=2)
-  dev.off()
-```
-
-****Over Here!!!
-
-```{r}
-
-lachWiiITS        <- readAAStringSet(paste(lachWiiITSFasta), format = "fasta")
-names(lachWiiITS) <- "Lachnellula_willkommii-ITS"
-fastaForGenBank   <- lachWiiITS
-
-writeXStringSet(lachWiiITS, 
-                file   = paste(genBankPath, "fasta_for_GenBank.fasta", sep = ""),
-                append = FALSE, 
-                format = "fasta")
-
-
-```
-
-If only one sequence start with this - I'm not sure how to work this....
-```{r}
-# # create text file from alignment
-# align <- read.dna(paste(ID_Folder, "/", ID_fasta_files, sep =""), format="fasta", as.character = FALSE)
-# # create text file from alignment
-# align_txt <- sapply(align , function(x) toString(x))
-# # remove all gaps, commas, and spaces
-# align_txt <- as.character(gsub("-|,| ", "", align_txt))
-# fasta_for_GenBank <- cbind(rownames(align), align_txt)
-# rownames(fasta_for_GenBank) <- rownames(align)
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
