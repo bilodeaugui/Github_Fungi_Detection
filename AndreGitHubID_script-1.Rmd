@@ -1,4 +1,4 @@
-André's GitHub Identification Script AndreGitHubID_script-1.Rmd
+# André's GitHub Identification Script AndreGitHubID_script-1.Rmd
 ====================================================================================================
 
 Setting things up:
@@ -129,24 +129,59 @@ Option A: 1 starting sequence
 If I want to run this script with only 1 starting sequence:
 Specify Folder, read it, rename the sequence if necessary, and put that into the fasta for genBank
 variable.
+
+Specify the name of the query fasta file:
 ```{r}
-lachWiiITSFasta <- paste(sharedPath, 
-                         "data/Lachnellula_willkommii/Final_Sequences/ITS_Consensus.fasta",
-                         sep = "")
-lachWiiITS        <- readAAStringSet(paste(lachWiiITSFasta), format = "fasta")
-names(lachWiiITS) <- "Lachnellula_willkommii-ITS"
-fastaForGenBank   <- lachWiiITS
+querySingleFasta <- "query.fasta"
+```
+Provide the path to the query. Default is to place the query file in the idFolder and don't change
+anything in the following chunk.
+```{r}
+queryPath <- paste(sharedPath, idFolder, querySingleFasta, sep = "")
 ```
 
-Option B: >1 Starting sequences
+OR, to see the fasta files in the idFolder and choose a specific one interactively:
+```{r}
+idFastaFiles <- list.files(path = paste(sharedPath, idFolder, sep = ""), 
+                           pattern = "\\.fas$|\\.fasta$", 
+                           recursive = FALSE)
+```
+Pick the right file(s)
+```{r}
+idFastaFiles
+idFastaFiles <- idFastaFiles[1] # If I only want this one
+idFastaFiles
+querySingleFasta <- idFastaFiles
 
+# Set the path manually:
+idFastaFiles <- paste(sharedPath, idFolder, idFastaFiles, sep = "")
+queryPath    <- idFastaFiles
+```
+
+
+Read the query sequence into RStudio:
+```{r}
+query <- readAAStringSet(queryPath, format = "fasta")
+```
+
+If you want to change the name of the single-query sequence, specify in the following chunk:
+```{r}
+names(query) <- "Lawii_ITS1region"
+```
+
+The query specified will be used as input to GenBank.
+```{r}
+fastaForGenBank <- query
+```
+
+
+Option B: >1 Starting sequences
 Find the fasta file(s)
 ```{r}
 idFastaFiles <- list.files(path = paste(sharedPath, idFolder, sep = ""), 
                            pattern = "\\.fas$|\\.fasta$", 
                            recursive = FALSE)
 ```
-
 Pick the right file(s)
 ```{r}
 idFastaFiles
@@ -164,10 +199,6 @@ cmd <- paste(" cat ", paste(sharedPath, idFolder, as.character(idFastaFiles),
 system(cmd)
 
 idFastaFiles <- paste(sharedPath, idFolder, "query.fasta", sep = "")
-
-# If you have only the one file and don't need to combine into a bigger file, set the path manually:
-idFastaFiles <- paste(sharedPath, idFolder, idFastaFiles, sep = "")
-
 ```
 
 
