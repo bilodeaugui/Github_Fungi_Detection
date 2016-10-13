@@ -208,6 +208,9 @@ query4 <- "(Helotiales[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature]))
             OR Lachnellula[ORGN])"
 query5 <- "(Ustilaginomycetes[ORGN] AND (rRNA[gene] OR 26S[gene] OR ribosomal[product]) 
             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+query6 <- "(Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+            NOT(Lachnellula willkommii[ORGN] OR environmental samples[organism] OR metagenomes[orgn]
+            OR unidentified[orgn])"
 ```
 
 #### Generate the databases as gene ID lists, *gilist.txt*, and write these to the GenBank folder:
@@ -218,12 +221,14 @@ webEnvSearch2 <- entrez_search(db="nuccore", query2, retmax=999999)
 webEnvSearch3 <- entrez_search(db="nuccore", query3, retmax=999999)
 webEnvSearch4 <- entrez_search(db="nuccore", query4, retmax=999999)
 webEnvSearch5 <- entrez_search(db="nuccore", query5, retmax=999999)
+webEnvSearch6 <- entrez_search(db="nuccore", query6, retmax=999999)
 
 length(webEnvSearch1$ids)
 length(webEnvSearch2$ids)
 length(webEnvSearch3$ids)
 length(webEnvSearch4$ids)
 length(webEnvSearch5$ids)
+length(webEnvSearch6$ids)
 
 write.table(webEnvSearch1$ids, file = paste(genBankPath, "query1_gilist.txt", sep = ""), 
             append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
@@ -234,6 +239,8 @@ write.table(webEnvSearch3$ids, file = paste(genBankPath, "query3_gilist.txt", se
 write.table(webEnvSearch4$ids, file = paste(genBankPath, "query4_gilist.txt", sep = ""), 
             append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
 write.table(webEnvSearch5$ids, file = paste(genBankPath, "query5_gilist.txt", sep = ""), 
+            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
+write.table(webEnvSearch6$ids, file = paste(genBankPath, "query6_gilist.txt", sep = ""), 
             append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
 ```
 
@@ -278,7 +285,6 @@ cmd <- with(metadata,
                                     sep = ""),
                   sep = ""))
 
-
 suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
 ```
 
@@ -308,7 +314,7 @@ library("seqinr")
 #                                    stringsAsFactors = FALSE)
 # }
 
-i <- 5   # This is for our query1 database for BLAST 
+i <- 6   # This is for our query1 database for BLAST 
 
 gbBlastTable <- read.table(paste(genBankPath, metadata$BlastGenBank_output[i], sep = ""),
                            header = FALSE,
