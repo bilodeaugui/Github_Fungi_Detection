@@ -186,14 +186,24 @@ fastaForGenBank <- queryFasta
 
 #### Generate databases to blast query against:  
  
-Perform sets of queries that group:
+Perform sets of queries such as:
 1. All of the Helotiales
 2. Only the Lachnum and Lachnellula genus of Helotiales
 3. Only the Lachnellula genus
 4. All of the Helotiales EXCEPT the Lachnellula genus
-5. All fungi EXCEPT Helotiales
 
-*I would like to be able to take query options from a csv table, that way users can plan their approach and import it without having to adjust a script*
+**Prepare a csv file for your desired query searches**
+The column headers and input MUST be formatted as follows:
+
+QueryName  | Include_organism        | Include_feature | exclude_organism
+---------- | ----------------------- | --------------- | ------------------------------------------------
+Query1     | Helotiales              | rRNA            | environmental samples
+Query2     | Helotiales; Sclerotinia | rRNA; misc_RNA  | environmental samples; metagenomes; unidentified
+
+*You can have 1 or more queries and each criteria may have one or more variables. This script is not
+yet adapted to blank inputs.
+
+The following chunk reads in your prepared csv file that has your query criteria for each query 
 ```{r}
 library("rentrez")
 queryCsv      <- list.files(path = paste(sharedPath, idFolder, sep = ""), 
@@ -220,31 +230,12 @@ queryMetadata$FullQuery <- paste("(", queryMetadata$Include_organism,
                                  " AND (", queryMetadata$Include_feature, 
                                  ")) NOT(", queryMetadata$exclude_organism, ")",
                                  sep = "")
-queryMetadata$FullQuery
+queryMetadata$FullQuery[k]
 
 # query1 <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
 #             OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
 #             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-# query2 <- "(Lachnum[ORGN] OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-#             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-# query3 <- "(Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-#             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-# query4 <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
-#             AND (rRNA[Feature] OR misc_RNA[Feature])) 
-#             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn]
-#             OR Lachnellula[ORGN])"
-# query5 <- "(Ustilaginomycetes[ORGN] AND (rRNA[gene] OR 26S[gene] OR ribosomal[product]) 
-#             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-# query6 <- "(Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-#             NOT(Lachnellula willkommii[ORGN] OR environmental samples[organism] OR metagenomes[orgn]
-#             OR unidentified[orgn])"
-# query7 <- "(Lachnum[ORGN] OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-#             NOT(Lachnellula willkommii[ORGN] OR environmental samples[organism] OR metagenomes[orgn] 
-#             OR unidentified[orgn])"
-# query8 <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
-#             OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-#             NOT(Lachnellula willkommii[ORGN] OR environmental samples[organism] OR metagenomes[orgn] 
-#             OR unidentified[orgn])"
+
 ```
 
 #### Generate the databases as gene ID lists, *gilist.txt*, and write these to the GenBank folder:
