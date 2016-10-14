@@ -193,56 +193,72 @@ Perform sets of queries that group:
 4. All of the Helotiales EXCEPT the Lachnellula genus
 5. All fungi EXCEPT Helotiales
 
+*I would like to be able to take query options from a csv table, that way users can plan their approach and import it without having to adjust a script*
 ```{r}
 library("rentrez")
+queryCsv      <- list.files(path = paste(sharedPath, idFolder, sep = ""), 
+                            pattern = "\\.csv$", 
+                            recursive = FALSE)
+queryCsv
+queryCsv <- queryCsv[1]
+queryCsv
 
-query1 <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
-            OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-query2 <- "(Lachnum[ORGN] OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-query3 <- "(Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-query4 <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
-            AND (rRNA[Feature] OR misc_RNA[Feature])) 
-            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn]
-            OR Lachnellula[ORGN])"
-query5 <- "(Ustilaginomycetes[ORGN] AND (rRNA[gene] OR 26S[gene] OR ribosomal[product]) 
-            NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-query6 <- "(Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
-            NOT(Lachnellula willkommii[ORGN] OR environmental samples[organism] OR metagenomes[orgn]
-            OR unidentified[orgn])"
+queryMetadata <- read.csv(paste(sharedPath, idFolder, queryCsv, sep = ""), stringsAsFactors = FALSE)
+queryMetadata$Include_organism <- gsub(";", "[ORGN] OR", queryMetadata$Include_organism, 
+                                       ignore.case = FALSE)
+queryMetadata$Include_organism <- gsub("$", "[ORGN]", queryMetadata$Include_organism, 
+                                       ignore.case = FALSE)
+queryMetadata$Include_feature  <- gsub(";", "[Feature] OR", queryMetadata$Include_feature, 
+                                       ignore.case = FALSE)
+queryMetadata$Include_feature  <- gsub("$", "[Feature]", queryMetadata$Include_feature, 
+                                       ignore.case = FALSE)
+queryMetadata$exclude_organism  <- gsub(";", "[ORGN] OR", queryMetadata$exclude_organism, 
+                                       ignore.case = FALSE)
+queryMetadata$exclude_organism  <- gsub("$", "[ORGN]", queryMetadata$exclude_organism, 
+                                       ignore.case = FALSE)
+queryMetadata$FullQuery <- paste("(", queryMetadata$Include_organism, 
+                                 " AND (", queryMetadata$Include_feature, 
+                                 ")) NOT(", queryMetadata$exclude_organism, ")",
+                                 sep = "")
+queryMetadata$FullQuery
+
+# query1 <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
+#             OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+#             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+# query2 <- "(Lachnum[ORGN] OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+#             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+# query3 <- "(Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+#             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+# query4 <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
+#             AND (rRNA[Feature] OR misc_RNA[Feature])) 
+#             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn]
+#             OR Lachnellula[ORGN])"
+# query5 <- "(Ustilaginomycetes[ORGN] AND (rRNA[gene] OR 26S[gene] OR ribosomal[product]) 
+#             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
+# query6 <- "(Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+#             NOT(Lachnellula willkommii[ORGN] OR environmental samples[organism] OR metagenomes[orgn]
+#             OR unidentified[orgn])"
+# query7 <- "(Lachnum[ORGN] OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+#             NOT(Lachnellula willkommii[ORGN] OR environmental samples[organism] OR metagenomes[orgn] 
+#             OR unidentified[orgn])"
+# query8 <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
+#             OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+#             NOT(Lachnellula willkommii[ORGN] OR environmental samples[organism] OR metagenomes[orgn] 
+#             OR unidentified[orgn])"
 ```
 
 #### Generate the databases as gene ID lists, *gilist.txt*, and write these to the GenBank folder:
 ```{r}
-
-webEnvSearch1 <- entrez_search(db="nuccore", query1, retmax=999999)
-webEnvSearch2 <- entrez_search(db="nuccore", query2, retmax=999999)
-webEnvSearch3 <- entrez_search(db="nuccore", query3, retmax=999999)
-webEnvSearch4 <- entrez_search(db="nuccore", query4, retmax=999999)
-webEnvSearch5 <- entrez_search(db="nuccore", query5, retmax=999999)
-webEnvSearch6 <- entrez_search(db="nuccore", query6, retmax=999999)
-
-length(webEnvSearch1$ids)
-length(webEnvSearch2$ids)
-length(webEnvSearch3$ids)
-length(webEnvSearch4$ids)
-length(webEnvSearch5$ids)
-length(webEnvSearch6$ids)
-
-write.table(webEnvSearch1$ids, file = paste(genBankPath, "query1_gilist.txt", sep = ""), 
-            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
-write.table(webEnvSearch2$ids, file = paste(genBankPath, "query2_gilist.txt", sep = ""), 
-            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
-write.table(webEnvSearch3$ids, file = paste(genBankPath, "query3_gilist.txt", sep = ""), 
-            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
-write.table(webEnvSearch4$ids, file = paste(genBankPath, "query4_gilist.txt", sep = ""), 
-            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
-write.table(webEnvSearch5$ids, file = paste(genBankPath, "query5_gilist.txt", sep = ""), 
-            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
-write.table(webEnvSearch6$ids, file = paste(genBankPath, "query6_gilist.txt", sep = ""), 
-            append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
+k <- 1
+for (k in 1:nrow(queryMetadata)) {
+  webEnvSearchTemp <- entrez_search(db="nuccore", queryMetadata$FullQuery[k], retmax=999999)
+  cat("\n", "The length of the webEnvSearch for ", queryMetadata$QueryName[k], " is: ")
+  cat(length(webEnvSearchTemp$ids))
+  cat("\n")
+  write.table(webEnvSearchTemp$ids, 
+              file = paste(genBankPath, queryMetadata$QueryName[k], "_gilist.txt", sep = ""),
+              append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
+}
 ```
 
 #### Set the Blast options and output format:  
