@@ -203,7 +203,8 @@ query2 <- "(Lachnum[ORGN] OR Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Fe
             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
 query3 <- "(Lachnellula[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn])"
-query4 <- "(Helotiales[ORGN] AND (rRNA[Feature] OR misc_RNA[Feature])) 
+query4 <- "(Helotiales[ORGN] OR Sclerotinia[ORGN] OR Phialocephala[ORGN] OR Marssonina[ORGN] 
+            AND (rRNA[Feature] OR misc_RNA[Feature])) 
             NOT(environmental samples[organism] OR metagenomes[orgn] OR unidentified[orgn]
             OR Lachnellula[ORGN])"
 query5 <- "(Ustilaginomycetes[ORGN] AND (rRNA[gene] OR 26S[gene] OR ribosomal[product]) 
@@ -251,7 +252,7 @@ pathBlastDbNt <- "/isilon/biodiversity/reference/ncbi/blastdb/reference/nt/nt"
 outfmtCols    <- c("qseqid",   "sallacc", "pident", "length", 
                    "mismatch", "gapopen", "qstart", "qend", 
                    "sstart",   "send",    "evalue", "bitscore")
-maxTargetSeqs <- 200
+maxTargetSeqs <- 400
 dustBlastn    <- "no"
 gapOpen       <- 1
 gapExtend     <- 1
@@ -473,14 +474,14 @@ queryLength
 
 #### Calculate a confidence interval based on all sequences
 
-*Note: I did not finish the following chunk for query4, I lost all my sequences with the following settings for that one.*
+*Note: I did not finish the following chunk for query5, I lost all my sequences with the following settings for that one.*
 ```{r}
 library("chemometrics")
 
 confInterv <- 2*sd_trim(width(xTrim), trim=0.05, const=FALSE)
 
 # Show the sequences that will be removed
-toRemove <- xTrim[(width(xTrim) < queryLength - 1*confInterv | width(xTrim) > queryLength + 2*confInterv), ]
+toRemove <- xTrim[(width(xTrim) < queryLength - 1.05*confInterv | width(xTrim) > queryLength + 2*confInterv), ]
 # toRemove <- xTrim[(width(xTrim) < meanLength - 10*confInterv | width(xTrim) > meanLength + 10*confInterv), ]
 
 length(toRemove)
@@ -510,10 +511,17 @@ cmd2 <- paste("cat ",
               sep = "")
 system(cmd2)
 ```
-
+#### Record the name of the removed and extracted fasta files, and "to align" fasta files in the metadata table:
+```{r}
+for(k in 1:nrow(metadata)){
+    metadata$GenGank_Removed_Fasta <- paste(metadata$queryDataBase, "_GB_removed.fasta", sep = "")
+    metadata$GenGank_extracted <- paste(metadata$queryDataBase, "_GB_csv_extracted.fasta", sep = "")
+    metadata$GB_to_align_fasta <- paste(metadata$queryDataBase, "_to_align.fasta", sep = "")
+}
+```
 ### Do MAFFT alignement of sequences:  
 ```{r}
-prefix <- "B_alignFasta"
+prefix <- paste("B_alignFasta", metadata$queryDataBase[i], sep = "_")
 
 cmd3 <- paste("/opt/bio/mafft/bin/mafft --reorder --maxiterate 1000 --localpair --thread 6 ",  
               sharedPath, idFolder, metadata$queryDataBase[i], "_to_align.fasta > ", 
@@ -522,7 +530,12 @@ cmd3 <- paste("/opt/bio/mafft/bin/mafft --reorder --maxiterate 1000 --localpair 
 
 suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd3, prefix, suffix)
 ```
-
+#### Record the name of the query + blast MAFFT alignment output files in the metadata table:
+```{r}
+for(k in 1:nrow(metadata)){
+    metadata$MAFFT_Alignment <- paste(metadata$queryDataBase, "_All_files_aligned.fasta", sep = "")
+}
+```
 *Check if the qsub job is still running:*
 ```{r}
 system("/opt/gridengine/bin/linux-x64/qstat")
@@ -544,10 +557,10 @@ align  <- read.dna(alignmentFile, format = "fasta")
 dm   <- dist.dna(align, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
 tree <- njs(dm)
 maxV <- max(rowSums(dm), na.rm = TRUE)
-```
+#```
 
-This is to get the root of the tree with the most distant species and generate nj tree
-```{r}
+#This is to get the root of the tree with the most distant species and generate nj tree
+#```{r}
 
 myRoot <- which(rowSums(dm) == maxV)
 max(dm, na.rm = TRUE)
@@ -574,7 +587,15 @@ pdf(file = paste(sharedPath, idFolder,
   title(main="", outer=FALSE, cex.main=1, font.main=2)
   dev.off()
 ```
-
+#### Record the name of the Newick and neighbour-goining tree
+in the metadata table:
+```{r}
+for(k in 1:nrow(metadata)){
+    metadata$newick_tree <- paste(metadata$queryDataBase, "_nj_tree.newick", sep = "")
+    metadata$NJ_tree     <- paste(metadata$queryDataBase, 
+                                  "_NJ_bionj_K80_tree_GenBank_and_ID_trimmed.pdf", sep = "")
+}
+```
 
 ### Option B: >1 Starting sequences
 1. Find the fasta file(s)
