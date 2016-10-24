@@ -334,7 +334,7 @@ for (i in 1:nrow(queryMetadata)) {
                               perl        = FALSE, 
                               fixed       = FALSE, 
                               useBytes    = FALSE))
-    k <- 1
+   # k <- 1
     for(k in 1:nrow(gbBlastTable)) { 
         if (unlist(multiGI[k])[1] != -1){ 
             parsedNames <- strsplit(as.character(gbBlastTable$subject_ids[k]), ";")[[1]]  # [[1]] to show first element 
@@ -461,7 +461,11 @@ library("ape")
                                   sep = ""), 
                      format = "fasta", 
                      append = FALSE)
-}
+#}
+```
+
+#### After running above chunk for each query, add the names of the files to the metadata table:
+```{r}
 queryMetadata$CheckOrder_FastaBlast <- paste(queryMetadata$QueryName, 
                                              "_CHECK_ORDER_OF_FASTA_file_AND_BLAST_TABLE.csv",
                                              sep = "")
@@ -471,9 +475,11 @@ queryMetadata$CheckBlastResults     <- paste(queryMetadata$QueryName,
 queryMetadata$dataAgg     <- paste(queryMetadata$QueryName, "_dataAgg.txt", sep = "")
 queryMetadata$gbDNAstring <- paste(queryMetadata$QueryName, "_gbDNAstring.fasta", sep = "")
 ```
-*** Will not loop into the next section 
+
+**** Over here!!! Need to fix, removed loop I was trying to make in the previous chunk, so 
+now must reset the arrangement for the chunk below:
 ```{r}
-i <- 6   # This is for our query1 database for BLAST 
+#i <- 6   # This is for our query1 database for BLAST 
 
 gbBlastTable <- read.table(paste(genBankPath, queryMetadata$BlastGB_FastaOUT[i], sep = ""),
                            header = FALSE,
