@@ -11,7 +11,7 @@ Getting started in R: Set the working directory
 Add evniroment details to allow qsub submission from within RStudio:
 ```{r}
 Sys.setenv(SGE_ROOT="/opt/gridengine")
-# Sys.setenv(SGE_CELL="default")
+Sys.setenv(SGE_CELL="default")
 Sys.setenv(SGE_ARCH="linux-x64")
 Sys.setenv(SGE_EXECD_PORT="537")
 Sys.setenv(SGE_QMASTER_PORT="536")
@@ -242,6 +242,7 @@ write.table(queryMetadata,
 
 #### Generate the databases as gene ID lists, *gilist.txt*, and write these to the GenBank folder:
 ```{r}
+library("rentrez")
 k <- 1
 for (k in 1:nrow(queryMetadata)) {
   webEnvSearchTemp <- entrez_search(db="nuccore", queryMetadata$FullQuery[k], retmax=999999)
@@ -295,7 +296,7 @@ cmd <- with(queryMetadata,
 suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
 ```
 
-#### Record the name of the blast output files in the metadata table:
+#### While the above chunk is running on the biocluster, record the name of the blast output files in the metadata table:
 ```{r}
 for(k in 1:nrow(queryMetadata)){
     queryMetadata$BlastGB_FastaOUT <- paste(queryMetadata$QueryName, "_GenBank.fasta.out", sep = "")
@@ -305,7 +306,9 @@ for(k in 1:nrow(queryMetadata)){
 ```{r}
 system("/opt/gridengine/bin/linux-x64/qstat")
 ```
-
+*Once the qsub job has finished perform the next step.*
+We always want to remove temporary files that clutter the working directory, while keeping log files that audit our process and maintain a record. 
+ 
 *Clean-up step: Remove the output files while keeping the qsub and bash file:*
 ```{r}
 RemoveQsubTempFiles(sharedPathAn, prefix)
