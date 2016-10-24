@@ -466,7 +466,7 @@ queryMetadata$CheckBlastResults     <- paste(queryMetadata$QueryName,
 queryMetadata$dataAgg     <- paste(queryMetadata$QueryName, "_dataAgg.txt", sep = "")
 queryMetadata$gbDNAstring <- paste(queryMetadata$QueryName, "_gbDNAstring.fasta", sep = "")
 ```
-
+*** Will not loop into the next section 
 ```{r}
 i <- 6   # This is for our query1 database for BLAST 
 
