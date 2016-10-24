@@ -210,7 +210,7 @@ queryCsv      <- list.files(path = paste(sharedPath, idFolder, sep = ""),
                             pattern = "\\.csv$", 
                             recursive = FALSE)
 queryCsv
-queryCsv <- queryCsv[1]
+queryCsv <- queryCsv[3] # Choose the correct csv file number from those printed out in the console
 queryCsv
 
 queryMetadata <- read.csv(paste(sharedPath, idFolder, queryCsv, sep = ""), stringsAsFactors = FALSE)
