@@ -311,7 +311,10 @@ We always want to remove temporary files that clutter the working directory, whi
  
 *Clean-up step: Remove the output files while keeping the qsub and bash file:*
 ```{r}
-RemoveQsubTempFiles(sharedPathAn, prefix)
+RemoveQsubTempFiles(sharedPathAn, prefix) # This is no longer working...
+#idFastaFiles <- list.files(path = paste(sharedPathAn, prefix, sep = ""), 
+                           pattern = "\\.sh$|\\.sub$", 
+                           recursive = FALSE)
 ```
 
 #### Read and consolitdate BLAST outputs. I would like to fix this so that I can loop this for all the Blast output tables.
