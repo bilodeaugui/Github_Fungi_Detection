@@ -641,6 +641,18 @@ for (i in 1:nrow(queryMetadata)) {
 ```
 
 
+###Generating a consensus sequence for each query set of sequence alignments: **BioStrings**
+```{r}
+
+library(Biostrings)
+i <- 1
+for (i in 1:nrow(queryMetadata)) {
+    alignedTemp <- readDNAStringSet(queryMetadata$allAlignedPath[i])
+
+
+
+```
+
 ### Option B: >1 Starting sequences
 1. Find the fasta file(s)
 ```{r}
