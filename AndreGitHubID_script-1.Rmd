@@ -419,7 +419,7 @@ queryMetadata$gbDNAStringPath <- paste(genBankPath, queryMetadata$gbDNAString, s
 ```
 
 ```{r}
-i <- 3
+
 for (i in 1:nrow(queryMetadata)) {
     gbBlastTableTemp <- read.table(queryMetadata$gbBlastTablePath[i],
                                    sep = "\t", header = TRUE, comment.char = "", quote = "",
@@ -456,7 +456,14 @@ for (i in 1:nrow(queryMetadata)) {
                 append = FALSE, 
                 sep = ",", 
                 col.names = NA)
-    
+    df <- dataAggTemp
+    df <- as.matrix(df)
+    write.table(df,
+                file = paste(sharedPath, idFolder,
+                             queryMetadata$QueryName[i], ".dataAgg.txt", sep = ""),
+                append = FALSE,
+                sep = "\t",
+                col.names = NA)
     library("xlsx")
 # http://stackoverflow.com/questions/13545547/how-to-write-a-data-frame-with-one-column-a-list-to-a-file
     dataset2Temp <- dataAggTemp # make a copy just to be on the safe side
@@ -479,44 +486,87 @@ for (i in 1:nrow(queryMetadata)) {
 #### After running above chunk for each query, add the names of the files to the metadata table:
 ```{r}
 queryMetadata$checkOrder <- paste(queryMetadata$QueryName, 
-                                             "_CHECK_ORDER_OF_FASTA_AND_BLAST_TABLE.csv",
-                                             sep = "")
+                                             "_CHECK_ORDER_OF_FASTA_AND_BLAST_TABLE.csv", sep = "")
 queryMetadata$checkOrderPath <- paste(sharedPath, idFolder, queryMetadata$checkOrder, sep = "")
-queryMetadata$dataAgg     <- paste(queryMetadata$QueryName, 
-                                             "_to_check_BLAST_results_table.xlsx", sep = "")
-queryMetadata$dataAggPath <- paste(sharedPath, idFolder, queryMetadata$dataAgg, sep = "")
+queryMetadata$dataAgg        <- paste(queryMetadata$QueryName, ".dataAgg.txt", sep = "")
+queryMetadata$dataAggPath    <- paste(sharedPath, idFolder, queryMetadata$dataAgg, sep = "")
+queryMetadata$checkBlast     <- paste(queryMetadata$QueryName, 
+                                                "_to_check_BLAST_results_table.xlsx", sep = "")
+queryMetadata$checkBlastPath <- paste(sharedPath, idFolder, queryMetadata$checkBlast, sep = "")
 ```
 
 #### Trim
 ```{r}
-k <- 8 # why does Andre have this here?
+#k <- 8 # why does Andre have this here?
+queryMetadata$gbRemoved <- paste(queryMetadata$QueryName, ".GB_removed.fasta", sep = "")
+queryMetadata$gbRemovedPath <- paste(sharedPath, idFolder, queryMetadata$gbRemoved, sep = "")
+queryMetadata$xtrimNoOutliers <- paste(queryMetadata$QueryName, ".GB_csv_extracted.fasta", sep = "")
+queryMetadata$xtrimNoOutliersPath <- paste(sharedPath, idFolder, queryMetadata$xtrimNoOutliers, sep = "")
+queryMetadata$toAlign <- paste(queryMetadata$QueryName, ".to_align.fasta", sep = "")
+queryMetadata$toAlignPath <- paste(sharedPath, idFolder, queryMetadata$toAlign, sep = "")
 
-gbDNAstringTemp2 <- 
-xTrim <- gbDNAstring
+library("chemometrics")
 
-for(k in 1:length(xTrim)) { 
-    if (dataAgg$sense[k] == 1) { 
-        xTrim[k] <- DNAStringSet(xTrim[k], start = dataAgg$min[k], 
-                                 end = dataAgg$max[k], width = NA, use.names = TRUE) 
-        print(c(k, dataAgg$sense[k])) 
-        } else { 
-            if (dataAgg$sense[k] == -1) {  
-                xTrim[k] <- reverseComplement(DNAStringSet(xTrim[k], start = dataAgg$min[k], 
-                                                           end = dataAgg$max[k], width = NA, 
-                                                           use.names = TRUE)) 
-                print(c(k, dataAgg$sense[k])) 
-                } else { 
-                    xTrim[k] <- DNAStringSet("NNNN") 
-                    print(c(k, "NNNN")) 
-                    } 
-            } 
+for (i in 1:nrow(queryMetadata)) {
+    dataAggTemp <- read.table(queryMetadata$dataAggPath[i],
+                              sep = "\t", header = TRUE, row.names = NULL, as.is = TRUE)
+    gbDNAstringTemp  <- readDNAStringSet(queryMetadata$gbDNAStringPath[i])
+    xTrim <- gbDNAstringTemp
+    for(k in 1:length(xTrim)) { 
+        if (dataAggTemp$sense[k] == 1) {
+            xTrim[k] <- DNAStringSet(xTrim[k], start = dataAggTemp$min[k], 
+                                     end = dataAggTemp$max[k], width = NA, use.names = TRUE) 
+            print(c(k, dataAggTemp$sense[k])) 
+            } else { 
+                if (dataAggTemp$sense[k] == -1) {  
+                    xTrim[k] <- reverseComplement(DNAStringSet(xTrim[k], start = dataAggTemp$min[k], 
+                                                               end = dataAggTemp$max[k], width = NA, 
+                                                               use.names = TRUE)) 
+                    print(c(k, dataAggTemp$sense[k])) 
+                    } else { 
+                        xTrim[k] <- DNAStringSet("NNNN") 
+                        print(c(k, "NNNN")) 
+                        } 
+                } 
+        }
+    # Show outliers
+    meanLength  <- mean(width(xTrim), trim = 0.05)
+    meanLength
+    queryLength <- mean(nchar(fastaForGenBank))
+    queryLength
+    
+    confInterv <- 2*sd_trim(width(xTrim), trim=0.05, const=FALSE)
+    
+    # Show the sequences that will be removed
+    toRemove <- xTrim[(width(xTrim) < queryLength - 1.05*confInterv | width(xTrim) > queryLength + 2*confInterv), ]
+    
+    # toRemove <- xTrim[(width(xTrim) < meanLength - 10*confInterv | width(xTrim) > meanLength + 10*confInterv), ]
+    length(toRemove)
+    names(toRemove)
+    
+    # Write file with removed sequences
+    writeXStringSet(toRemove, file = queryMetadata$gbRemovedPath[i], 
+                    append = FALSE, format = "fasta") 
+    
+    # Create the file without the outliers
+    xtrimNoOutliers <- xTrim[!names(xTrim) %in% names(toRemove)]
+    length(xtrimNoOutliers)
+    names(xtrimNoOutliers)
+    
+    # Write fasta file of trimmed sequences
+    writeXStringSet(xtrimNoOutliers, 
+                    file = queryMetadata$xtrimNoOutliersPath[i], 
+                    append = FALSE, format = "fasta") 
+    
+    # Concatenate the query fasta file and the fasta file of trimmed sequences to a new file:
+    cmd2 <- paste("cat ",  
+                  queryPath, " ",
+                  queryMetadata$xtrimNoOutliersPath[i], " > ",
+                  queryMetadata$toAlignPath[i], 
+                  sep = "")
+    
+    system(cmd2)
     }
-
-# Show outliers
-meanLength  <- mean(width(xTrim), trim = 0.05)
-meanLength
-queryLength <- mean(nchar(fastaForGenBank))
-queryLength
 ```
 
 #### Calculate a confidence interval based on all sequences
