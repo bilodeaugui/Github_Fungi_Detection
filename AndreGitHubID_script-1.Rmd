@@ -643,12 +643,24 @@ for (i in 1:nrow(queryMetadata)) {
 
 ###Generating a consensus sequence for each query set of sequence alignments: **BioStrings**
 ```{r}
-
 library(Biostrings)
+library(seqinr)
 i <- 1
 for (i in 1:nrow(queryMetadata)) {
-    alignedTemp <- readDNAStringSet(queryMetadata$allAlignedPath[i])
-
+    alignedTemp <- readDNAMultipleAlignment(queryMetadata$allAlignedPath[i], format = "fasta")
+    rownames(alignedTemp)
+    # consMatrix <- consensusMatrix(alignedTemp)
+    consensusTemp <- consensusString(alignedTemp, 
+                                     threshold=0.99,
+                                     ambiguityMap = "?")
+    
+    
+    # consensusViews(alignedTemp)
+    attributes(gbDNAstring)
+        writeXStringSet(gbDNAstring,
+                        file = paste(genBankPath,
+                                     queryMetadata$QueryName[i], ".gbDNAString.fasta", sep = ""),
+                        append = TRUE, format = "fasta")
 
 
 ```
