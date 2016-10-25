@@ -372,7 +372,7 @@ queryMetadata$uniqueGBPath     <- paste(genBankPath, queryMetadata$uniqueGB, sep
 ```
 
 
-
+#### Gather unique sequences, order and retrieve full names and write to new fasta:
 ```{r}
 library("ape")
 
@@ -595,56 +595,51 @@ system("/opt/gridengine/bin/linux-x64/qstat")
 RemoveQsubTempFiles(sharedPathAn, prefix)
 ```
 
-
-```{r}
-library("ape")
-alignmentFile <- paste(sharedPath, idFolder, 
-                       metadata$queryDataBase[i], "_All_files_aligned.fasta", sep = "")
-align  <- read.dna(alignmentFile, format = "fasta")
-
-# Raw distance is p-distance with substitution -> d: transition + transversion
-dm   <- dist.dna(align, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
-tree <- njs(dm)
-maxV <- max(rowSums(dm), na.rm = TRUE)
-#```
-
-#This is to get the root of the tree with the most distant species and generate nj tree
-#```{r}
-
-myRoot <- which(rowSums(dm) == maxV)
-max(dm, na.rm = TRUE)
-nrow(dm)
-
-
-tree <- njs(dm)
-write.tree(tree, file = paste(sharedPath, idFolder, 
-                              metadata$queryDataBase[i], "_nj_tree.newick", sep = ""), 
-           append = FALSE, digits = 15, tree.names = FALSE)
-
-# Code below doesn't work, because I have no root due to previous line not working.
-pdf(file = paste(sharedPath, idFolder, 
-                 metadata$queryDataBase[i], "_NJ_bionj_K80_tree_GenBank_and_ID_trimmed.pdf", 
-                 sep = ""), 
-    width = 8, height =36 )
- # "0.5-((nrow(dm)-50)/500)" is a rough equation to remove 0.1 to cex factor for every 50 taxa to keep font size small enough for larger data
-  # if you want to have longer branches, reduce x.lim by 0.1 increments
-  #plot.phylo(type = "phylogram", root(tree, my_root[1], node = NULL, resolve.root = TRUE), font=1, cex = 0.5,  x.lim = 0.7)
-  plot.phylo(type = "phylogram", root(tree, myRoot[1], node = NULL, resolve.root = TRUE), font=1, 
-      #       cex = 0.1,  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/2000), no.margin=TRUE)
-             cex = 0.54 - (sqrt(nrow(dm))/110),  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/2000), no.margin=TRUE)
-#cex = 0.54 - (sqrt(nrow(dm))/70),  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, edge.width= 1.1 - (nrow(dm)/1200), no.margin=TRUE)
-  title(main="", outer=FALSE, cex.main=1, font.main=2)
-  dev.off()
-```
-#### Record the name of the Newick and neighbour-goining tree
+#### Pre-record the name of the Newick and neighbour-goining tree
 in the metadata table:
 ```{r}
-for(k in 1:nrow(metadata)){
-    metadata$newick_tree <- paste(metadata$queryDataBase, "_nj_tree.newick", sep = "")
-    metadata$NJ_tree     <- paste(metadata$queryDataBase, 
-                                  "_NJ_bionj_K80_tree_GenBank_and_ID_trimmed.pdf", sep = "")
-}
+queryMetadata$njTree     <- paste(queryMetadata$QueryName, ".nj_tree.newick", sep = "")
+queryMetadata$njTreePath <- paste(sharedPath, idFolder, queryMetadata$njTree, sep = "")
+queryMetadata$njK80Tree  <- paste(queryMetadata$QueryName, 
+                                  ".NJ_bionj_K80_tree_GenBank_and_ID_trimmed.pdf", sep = "")
+queryMetadata$njK80TreePath <- paste(sharedPath, idFolder, queryMetadata$njK80Tree, sep = "")
 ```
+
+### Generate the trees
+```{r}
+library("ape")
+i <- 1
+
+for (i in 1:nrow(queryMetadata)) {
+    alignTemp <- read.dna(queryMetadata$allAlignedPath[i], format = "fasta")
+    
+    # Raw distance is p-distance with substitution -> d: transition + transversion
+    dm   <- dist.dna(alignTemp, model = "raw", pairwise.deletion = TRUE, as.matrix = TRUE)
+    tree <- njs(dm)
+    maxV <- max(rowSums(dm), na.rm = TRUE)
+    
+    #This is to get the root of the tree with the most distant species and generate nj tree
+    myRoot <- which(rowSums(dm) == maxV)
+    max(dm, na.rm = TRUE)
+    nrow(dm)
+    
+    tree <- njs(dm)
+    write.tree(tree, file = queryMetadata$njTreePath[i],
+               append = FALSE, digits = 15, tree.names = FALSE)
+    
+    pdf(file = queryMetadata$njK80TreePath[i],
+        width = 8, height =36 )
+    # "0.5-((nrow(dm)-50)/500)" is a rough equation to remove 0.1 to cex factor for every 50 taxa 
+    # to keep font size small enough for larger data
+    # if you want to have longer branches, reduce x.lim by 0.1 increments
+    plot.phylo(type = "phylogram", root(tree, myRoot[1], node = NULL, resolve.root = TRUE), font=1, 
+               cex = 0.54 - (sqrt(nrow(dm))/110),  x.lim = 0.07 + max(dm, na.rm = TRUE)/1.3, 
+               edge.width = 1.1 - (nrow(dm)/2000), no.margin = TRUE)
+    title(main = "", outer = FALSE, cex.main = 1, font.main = 2)
+    dev.off()
+    }
+```
+
 
 ### Option B: >1 Starting sequences
 1. Find the fasta file(s)
@@ -866,113 +861,3 @@ names(x_trim) <- paste(parsedCol$X6,"_",parsedCol$species,"_",parsedCol$GB,"_str
 
 writeXStringSet(x_trim, file="new_names.fasta", append=FALSE, format="fasta") 
 ```
-
-**** Over here!!! Need to fix, removed loop I was trying to make in the previous chunk, so 
-now must reset the arrangement for the chunk below:
-```{r}
-#i <- 6   # This is for our query1 database for BLAST 
-
-gbBlastTable <- read.table(paste(genBankPath, queryMetadata$BlastGB_FastaOUT[i], sep = ""),
-                           header = FALSE,
-                           stringsAsFactors = FALSE)
-
-colnames(gbBlastTable) <- c("query_id",   "subject_ids", " %identity", "alignment_length", 
-                            "mismatches", "gap_opens",   "q_start",    " q_end", 
-                            "s_start",    "s_end",       "evalue",     " bit_score")
-# to break multiple gi numbers/ accessions from NCBI table
-multiGI <- cbind(gregexpr(";", gbBlastTable$subject_ids,
-                          ignore.case = FALSE, 
-                          perl        = FALSE, 
-                          fixed       = FALSE, 
-                          useBytes    = FALSE))
-
-newGbBlastTable <- data.frame()
-for(k in 1:nrow(gbBlastTable)) { 
-    if (unlist(multiGI[k])[1] != -1){ 
-        parsedNames <- strsplit(as.character(gbBlastTable$subject_ids[k]), ";")[[1]]  # [[1]] to show first element 
-        tempTable   <- do.call("rbind", replicate((length(unlist(multiGI[k])) + 1), 
-                                                   gbBlastTable[k,], simplify = FALSE)) 
-        tempTable$subject_ids <- parsedNames 
-        newGbBlastTable <- rbind(newGbBlastTable, tempTable) 
-        } else {
-            newGbBlastTable <-  rbind(newGbBlastTable, gbBlastTable[k,]) 
-            } 
-    }
-
-gbBlastTable <- newGbBlastTable 
-summary(gbBlastTable)
-colnames(gbBlastTable)[2] <- "GB_accession"
-uniqueGB <- unique(gbBlastTable$GB_accession)
-```
-
-
-```{r}
-library("ape")
-sequences <- read.GenBank(uniqueGB, 
-                          seq.names = uniqueGB, 
-                          species.names = TRUE,
-                          gene.names    = FALSE, 
-                          as.character  = TRUE)
-
-sequenceOrder <- sequences[order(names(sequences))]
-names(sequenceOrder)[1]
-attr(sequences, "species")
-
-fullNames <- data.frame(attr(sequences, "species"), names(sequences), stringsAsFactors = FALSE)
-fullNames$SpStrain <-  do.call(paste, c(fullNames[1:2], sep = "_"))
-fullNamesOrdered   <- fullNames[order(fullNames$names.sequences.),] 
-nrow(fullNamesOrdered)
-```
-
-```{r}
-library(Biostrings)
-
-gbDNAstring <- DNAStringSet()
-
-for(k in 1:length(sequenceOrder)) { 
-    temp <- DNAStringSet(paste(sequenceOrder[[k]], collapse = "")) 
-    names(temp)  <- fullNamesOrdered$SpStrain[k] 
-    gbDNAstring  <- c(gbDNAstring, temp)
-} 
-
-# Creates a +/- column for orientation of sequences
-gbBlastTable$orientation <- sign(gbBlastTable$s_end - gbBlastTable$s_start)
-gbBlastTable$length      <- abs(gbBlastTable$s_end - gbBlastTable$s_start)
-gbBlastTable$query_id    <- as.character(gbBlastTable$query_id)
-
-# Put together data from multiple hits on single line
-dataAgg <- aggregate(gbBlastTable[c(2:14)], 
-                     by  = list(gbBlastTable$GB_accession, gbBlastTable$GB_accession),
-                     FUN = c)
-
-# find min and max and sense of hits
-for(k in 1:nrow(dataAgg)) {
-  dataAgg$min[k]   <- min(unlist(c(dataAgg$s_start[k],dataAgg$s_end[k])))
-  dataAgg$max[k]   <- max(unlist(c(dataAgg$s_start[k],dataAgg$s_end[k])))
-  dataAgg$sense[k] <- mean(unlist(c(dataAgg$orientation[k]))) 
-}
-
-
-# add a column with bp (width) of sequences.
-dataAgg$bp    <- width(gbDNAstring)
-dataAgg$width <- dataAgg$max - dataAgg$min
-dataAgg$diff  <- dataAgg$width - dataAgg$max
-dataAgg       <- dataAgg[order(as.character(dataAgg$Group.1)), ] 
-
-# to make sure that name order are the same
-checkOrder <- data.frame(names(gbDNAstring), dataAgg[,1])
-
-# Very Important
-# THE ORDER OF THESE TWO COLUMNS SHOULD BE THE SAME
-# SEQUENCES WILL BE OFF IF NOT
-write.table(checkOrder, 
-            file = paste(sharedPath, idFolder, 
-                         metadata$queryDataBase[i], "_CHECK_ORDER_OF_FASTA_file_AND_BLAST_TABLE.csv", 
-                         sep = ""), 
-            append = FALSE, 
-            sep = ",", 
-            col.names = NA)
-```
-
-
-
