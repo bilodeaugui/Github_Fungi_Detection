@@ -26,7 +26,8 @@ install.packages("seqinr")
 install.packages("chemometrics")
 ```
 
-Keep the library() loading separate from the install.packages chunk
+Keep the library() loading separate from the install.packages chunk 
+**Revise: Libraries should be loaded in the chunk their called in, except knitr**
 ```{r}
 library(knitr)
 library("xlsx")
@@ -347,6 +348,11 @@ for (i in 1:nrow(queryMetadata)) {
                 } 
         }
     gbBlastTable <- newGbBlastTable
+   # Creates a +/- column for orientation of sequences
+    gbBlastTable$orientation <- sign(gbBlastTable$s_end - gbBlastTable$s_start)
+    gbBlastTable$length      <- abs(gbBlastTable$s_end - gbBlastTable$s_start)
+    gbBlastTable$query_id    <- as.character(gbBlastTable$query_id)
+    
     summary(gbBlastTable)
     colnames(gbBlastTable)[2] <- "GB_accession"
     uniqueGB <- unique(gbBlastTable$GB_accession)
@@ -359,19 +365,24 @@ for (i in 1:nrow(queryMetadata)) {
                 append = FALSE, quote=FALSE, row.names=FALSE, col.names = FALSE)
 }
 
-queryMetadata$NewGBTable <- paste(queryMetadata$BlastGB_FastaOUT, ".New.txt", sep = "")
-queryMetadata$uniqueGB   <- paste(queryMetadata$QueryName, ".uniqueGB.txt", sep = "")
+#queryMetadata$NewGBTable <- paste(queryMetadata$BlastGB_FastaOUT, ".New.txt", sep = "")
+queryMetadata$gbBlastTable <- paste(queryMetadata$BlastGB_FastaOUT, ".New.txt", sep = "")
+queryMetadata$uniqueGB     <- paste(queryMetadata$QueryName, ".uniqueGB.txt", sep = "")
 ```
 
 
 ***Over here!!!!!
+***Need to write out gbDNAstring, 
+close that loop, 
+add the file name to queryMetadata$gbDNAstring
+
+Call in each i queryMetadata$gbDNAstring
+
 ```{r}
 library("ape")
-
+i <- 1
 #gbDNAstring <- DNAStringSet()
-#for (i in 1:nrow(queryMetadata)) {
-    i <- 1
-    
+for (i in 1:nrow(queryMetadata)) {
     uniqueGBtemp <- scan(paste(genBankPath, queryMetadata$uniqueGB[i], sep = ""), what = "", sep = "\n")
     sequences    <- read.GenBank(uniqueGBtemp,
                               seq.names = uniqueGBtemp, 
@@ -386,6 +397,9 @@ library("ape")
     fullNamesOrdered   <- fullNames[order(fullNames$names.sequences.),] 
     nrow(fullNamesOrdered)
     
+    
+    # For this next loop, MUST make sure you are doing it clean and no file already exists, because
+    # this loop will append as it executes.
     library(Biostrings)
     
     for(j in 1:length(sequenceOrder)) {
@@ -393,15 +407,24 @@ library("ape")
         temp <- DNAStringSet(paste(sequenceOrder[[j]], collapse = "")) 
         names(temp)  <- fullNamesOrdered$SpStrain[j] 
         gbDNAstring  <- c(gbDNAstring, temp)
+        writeXStringSet(gbDNAstring,
+                        file = paste(genBankPath,
+                                     queryMetadata$QueryName[i], ".gbDNAString.fasta", sep = ""),
+                        append = TRUE, format = "fasta")
         }
-    
-    # Creates a +/- column for orientation of sequences
-    gbBlastTableTemp <- read.table(paste(genBankPath, queryMetadata$NewGBTable[i], sep = ""),
-                                   sep = "\t", header = TRUE, comment.char = "", quote = "",
-                                   as.is = TRUE)
-    gbBlastTableTemp$orientation <- sign(gbBlastTableTemp$s_end - gbBlastTableTemp$s_start)
-    gbBlastTableTemp$length      <- abs(gbBlastTableTemp$s_end - gbBlastTableTemp$s_start)
-    gbBlastTableTemp$query_id    <- as.character(gbBlastTableTemp$query_id)
+    }
+```
+
+#### Add the name of the gbDNAString to the queryMetadata table: 
+```{r}
+queryMetadata$gbDNAString   <- paste(queryMetadata$QueryName, ".gbDNAString.fasta", sep = "")
+```
+
+```{r}
+#     gbBlastTableTemp <- read.table(paste(genBankPath, queryMetadata$NewGBTable[i], sep = ""),
+#                                    sep = "\t", header = TRUE, comment.char = "", quote = "",
+#                                    as.is = TRUE)
+
     
     # Put together data from multiple hits on single line
     dataAgg <- aggregate(gbBlastTableTemp[c(2:14)], 
