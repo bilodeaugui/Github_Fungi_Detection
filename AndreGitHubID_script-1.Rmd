@@ -484,6 +484,7 @@ for (i in 1:nrow(queryMetadata)) {
 ```
 
 #### After running above chunk for each query, add the names of the files to the metadata table:
++ pre-record the names of the ouput files from trim and alignment chunks
 ```{r}
 queryMetadata$checkOrder <- paste(queryMetadata$QueryName, 
                                              "_CHECK_ORDER_OF_FASTA_AND_BLAST_TABLE.csv", sep = "")
@@ -493,20 +494,20 @@ queryMetadata$dataAggPath    <- paste(sharedPath, idFolder, queryMetadata$dataAg
 queryMetadata$checkBlast     <- paste(queryMetadata$QueryName, 
                                                 "_to_check_BLAST_results_table.xlsx", sep = "")
 queryMetadata$checkBlastPath <- paste(sharedPath, idFolder, queryMetadata$checkBlast, sep = "")
+queryMetadata$gbRemoved      <- paste(queryMetadata$QueryName, ".GB_removed.fasta", sep = "")
+queryMetadata$gbRemovedPath  <- paste(sharedPath, idFolder, queryMetadata$gbRemoved, sep = "")
+queryMetadata$xtrimNoOutliers <- paste(queryMetadata$QueryName, ".GB_csv_extracted.fasta", sep = "")
+queryMetadata$xtrimNoOutliersPath <- paste(sharedPath, idFolder, queryMetadata$xtrimNoOutliers, sep = "")
+queryMetadata$toAlign        <- paste(queryMetadata$QueryName, ".to_align.fasta", sep = "")
+queryMetadata$toAlignPath    <- paste(sharedPath, idFolder, queryMetadata$toAlign, sep = "")
+queryMetadata$allAligned     <- paste(queryMetadata$QueryName, ".All_files_aligned.fasta", sep = "")
+queryMetadata$allAlignedPath <- paste(sharedPath, idFolder, queryMetadata$allAligned, sep = "")
 ```
 
 #### Trim
 ```{r}
-#k <- 8 # why does Andre have this here?
-queryMetadata$gbRemoved <- paste(queryMetadata$QueryName, ".GB_removed.fasta", sep = "")
-queryMetadata$gbRemovedPath <- paste(sharedPath, idFolder, queryMetadata$gbRemoved, sep = "")
-queryMetadata$xtrimNoOutliers <- paste(queryMetadata$QueryName, ".GB_csv_extracted.fasta", sep = "")
-queryMetadata$xtrimNoOutliersPath <- paste(sharedPath, idFolder, queryMetadata$xtrimNoOutliers, sep = "")
-queryMetadata$toAlign <- paste(queryMetadata$QueryName, ".to_align.fasta", sep = "")
-queryMetadata$toAlignPath <- paste(sharedPath, idFolder, queryMetadata$toAlign, sep = "")
 
 library("chemometrics")
-
 for (i in 1:nrow(queryMetadata)) {
     dataAggTemp <- read.table(queryMetadata$dataAggPath[i],
                               sep = "\t", header = TRUE, row.names = NULL, as.is = TRUE)
@@ -535,6 +536,7 @@ for (i in 1:nrow(queryMetadata)) {
     queryLength <- mean(nchar(fastaForGenBank))
     queryLength
     
+    #### Calculate a confidence interval based on all sequences
     confInterv <- 2*sd_trim(width(xTrim), trim=0.05, const=FALSE)
     
     # Show the sequences that will be removed
@@ -569,70 +571,20 @@ for (i in 1:nrow(queryMetadata)) {
     }
 ```
 
-#### Calculate a confidence interval based on all sequences
-
-*Note: I did not finish the following chunk for query5, I lost all my sequences with the following settings for that one.*
-```{r}
-library("chemometrics")
-
-confInterv <- 2*sd_trim(width(xTrim), trim=0.05, const=FALSE)
-
-# Show the sequences that will be removed
-toRemove <- xTrim[(width(xTrim) < queryLength - 1.05*confInterv | width(xTrim) > queryLength + 2*confInterv), ]
-# toRemove <- xTrim[(width(xTrim) < meanLength - 10*confInterv | width(xTrim) > meanLength + 10*confInterv), ]
-
-length(toRemove)
-names(toRemove)
-
-# Write file with removed sequences
-writeXStringSet(toRemove, file = paste(sharedPath, idFolder, 
-                                       metadata$queryDataBase[i], "_GB_removed.fasta", sep = ""), 
-                append = FALSE, format = "fasta") 
-
-# Create the file without the outliers
-xtrimNoOutliers <- xTrim[!names(xTrim) %in% names(toRemove)]
-length(xtrimNoOutliers)
-names(xtrimNoOutliers)
-
-# Write fasta file of trimmed sequences
-writeXStringSet(xtrimNoOutliers, 
-                file = paste(sharedPath, idFolder, 
-                             metadata$queryDataBase[i], "_GB_csv_extracted.fasta", sep = ""), 
-                append = FALSE, format = "fasta") 
-
-# Concatenate the query fasta file and the fasta file of trimmed sequences to a new file:
-cmd2 <- paste("cat ",  
-              queryPath, " ",
-              sharedPath, idFolder, metadata$queryDataBase[i], "_GB_csv_extracted.fasta > ",  
-              sharedPath, idFolder, metadata$queryDataBase[i], "_to_align.fasta", 
-              sep = "")
-system(cmd2)
-```
-#### Record the name of the removed and extracted fasta files, and "to align" fasta files in the metadata table:
-```{r}
-for(k in 1:nrow(metadata)){
-    metadata$GenGank_Removed_Fasta <- paste(metadata$queryDataBase, "_GB_removed.fasta", sep = "")
-    metadata$GenGank_extracted <- paste(metadata$queryDataBase, "_GB_csv_extracted.fasta", sep = "")
-    metadata$GB_to_align_fasta <- paste(metadata$queryDataBase, "_to_align.fasta", sep = "")
-}
-```
 ### Do MAFFT alignement of sequences:  
 ```{r}
-prefix <- paste("B_alignFasta", metadata$queryDataBase[i], sep = "_")
+prefix <- "B_alignFasta"
 
-cmd3 <- paste("/opt/bio/mafft/bin/mafft --reorder --maxiterate 1000 --localpair --thread 6 ",  
-              sharedPath, idFolder, metadata$queryDataBase[i], "_to_align.fasta > ", 
-              sharedPath, idFolder, metadata$queryDataBase[i], "_All_files_aligned.fasta",
-              sep = "")
+cmd <- with(queryMetadata,
+            paste("/opt/bio/mafft/bin/mafft --reorder --maxiterate 1000 --localpair --thread 6 ",  
+                queryMetadata$toAlignPath, 
+                " > ", 
+                queryMetadata$allAlignedPath, 
+                sep = ""))
 
-suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd3, prefix, suffix)
+suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
 ```
-#### Record the name of the query + blast MAFFT alignment output files in the metadata table:
-```{r}
-for(k in 1:nrow(metadata)){
-    metadata$MAFFT_Alignment <- paste(metadata$queryDataBase, "_All_files_aligned.fasta", sep = "")
-}
-```
+
 *Check if the qsub job is still running:*
 ```{r}
 system("/opt/gridengine/bin/linux-x64/qstat")
