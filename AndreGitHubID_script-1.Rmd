@@ -167,7 +167,7 @@ idFastaFiles <- paste(sharedPath, idFolder, idFastaFiles, sep = "")
 queryPath    <- idFastaFiles
 ```
 
-
+****Over here!!!! WHy is it reading in AA and not DNA?
 #### Read the query sequence into RStudio:
 ```{r}
 queryFasta <- readAAStringSet(queryPath, format = "fasta")
