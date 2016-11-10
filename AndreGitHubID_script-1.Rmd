@@ -7,6 +7,11 @@ source("http://www.Bioconductor.org/biocLite.R")
 biocLite("BiocUpgrade")
 
 ```{r}
+install.packages("rprojroot")
+```
+
+```{r}
+library(rprojroot)
 root <- rprojroot::is_rstudio_project
 scriptsPath <- root$make_fix_file(".")("R")
 scripts <- dir(root$find_file("R", path = root$find_file()))
