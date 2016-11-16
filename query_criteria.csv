@@ -1,0 +1,8 @@
+QueryName,Include_organism,Include_feature,Exclude_organism
+AllHelotiales,Helotiales; Sclerotinia; Phialocephala; Marssonina; Lachnellula,gene; source,environmental samples; metagenomes; unidentified
+LachnumLachnell,Lachnum; Lachnellula,gene; source,environmental samples; metagenomes; unidentified
+Lachnell,Lachnellula,gene; source,environmental samples; metagenomes; unidentified
+Ustilagino,Ustilaginomycetes,gene; source,environmental samples; metagenomes; unidentified
+LachnellNOTLawii,Lachnellula,gene; source,environmental samples; metagenomes; unidentified; Lachnellula willkommii
+LachnumLachnellNOTLawii,Lachnum; Lachnellula,gene; source,environmental samples; metagenomes; unidentified; Lachnellula willkommii
+AllHeloNOTLawii,Helotiales; Sclerotinia; Phialocephala; Marssonina; Lachnellula,gene; source,environmental samples; metagenomes; unidentified; Lachnellula willkommii

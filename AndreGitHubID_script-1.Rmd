@@ -7,7 +7,13 @@ source("http://www.Bioconductor.org/biocLite.R")
 biocLite("BiocUpgrade")
 
 ```{r}
+install.packages("rprojroot")
+```
+
+```{r}
+library(rprojroot)
 root <- rprojroot::is_rstudio_project
+rootPath <- paste(root$find_file(), "/", sep = "")
 scriptsPath <- root$make_fix_file(".")("R")
 scripts <- dir(root$find_file("R", path = root$find_file()))
 scriptsl <- paste(scriptsPath, scripts, sep = "//")
@@ -48,18 +54,24 @@ Record the path to the working directory and where the fasta files are. Create a
 directory if not already made, and manually put your query sequence(s) in the idFolder. 
 ```{r}
 sharedPath   <- "/home/CFIA-ACIA/girouxeml/PIRL_working_directory/"
-sharedPathAn <- paste(sharedPath, "output/", sep = "")
 setwd(sharedPath)
-idFolder  <- "Helotiales_ITS/"
+
+idFolder  <- "Helotiales_COX1/"
 dir.create(paste("", idFolder, sep = ""), 
            showWarnings = TRUE,
            recursive    = FALSE)
 
-dir.create(paste("", idFolder, "/", "GenBank/", sep = ""), 
+sharedPathAn <- paste(sharedPath, idFolder, "output/", sep = "")
+dir.create(paste("", idFolder, "output/", sep = ""), 
            showWarnings = TRUE,
            recursive    = FALSE)
 
 genBankPath <- paste(sharedPath, idFolder, "GenBank/", sep = "")
+dir.create(paste("", idFolder, "/", "GenBank/", sep = ""), 
+           showWarnings = TRUE,
+           recursive    = FALSE)
+
+
 ```
 
 ## Specifying your starting query sequence(s)
@@ -70,7 +82,7 @@ variable.
 
 1. Specify the name of the query fasta file:
 ```{r}
-querySingleFasta <- "query.fasta"
+querySingleFasta <- "with_mfannot_added-contig00001-cox1_gene-portion_overlapped_by_bos_taurus_mtco1.fasta"
 ```
 &nbsp;&nbsp;&nbsp;&nbsp;2\. Provide the path to the query. Default is to place the query file in the idFolder and don't change
 anything in the following chunk.
@@ -102,7 +114,7 @@ idFastaFiles <- paste(sharedPath, idFolder, idFastaFiles, sep = "")
 queryPath    <- idFastaFiles
 ```
 
-****Over here!!!! WHy is it reading in AA and not DNA?
+
 #### Read the query sequence into RStudio:
 ```{r}
 queryFasta <- readDNAStringSet(queryPath, format = "fasta")
@@ -110,7 +122,7 @@ queryFasta <- readDNAStringSet(queryPath, format = "fasta")
 
 *If you want to change the name of the single-query sequence, specify in the following chunk:*
 ```{r}
-names(queryFasta) <- "Lawii_ITS1region"
+names(queryFasta) <- "Lawii_COX1_partial_region"
 ```
 
 *The query specified will be used as input to GenBank.*
@@ -139,17 +151,21 @@ Query2     | Helotiales; Sclerotinia | rRNA; misc_RNA  | environmental samples; 
 *You can have 1 or more queries and each criteria may have one or more variables. This script is not
 yet adapted to blank inputs.
 
-The following chunk reads in your prepared csv file that has your query criteria for each query 
+The following chunk reads in your prepared csv file that has your query criteria for each query.
+This is looking for your prepared csv in your github project folder.
+You need to open the query.csv that comes with this package, edit it, and save it back in this directory,
+unless you save it elsewhere and then specify the path to the place you choose to save it.
 ```{r}
 library("rentrez")
-queryCsv      <- list.files(path = paste(sharedPath, idFolder, sep = ""), 
-                            pattern = "\\.csv$", 
-                            recursive = FALSE)
+
+queryCsv <- list.files(path = rootPath, 
+                       pattern = "\\.csv$", 
+                       recursive = FALSE)
 queryCsv
-queryCsv <- queryCsv[3] # Choose the correct csv file number from those printed out in the console
+queryCsv <- queryCsv[1] # Choose the correct csv file number from those printed out in the console
 queryCsv
 
-queryMetadata <- read.csv(paste(sharedPath, idFolder, queryCsv, sep = ""), stringsAsFactors = FALSE)
+queryMetadata <- read.csv(paste(rootPath, queryCsv, sep = ""), stringsAsFactors = FALSE)
 queryMetadata$Include_organism <- gsub(";", "[ORGN] OR", queryMetadata$Include_organism, 
                                        ignore.case = FALSE)
 queryMetadata$Include_organism <- gsub("$", "[ORGN]", queryMetadata$Include_organism, 
@@ -228,7 +244,7 @@ cmd <- with(queryMetadata,
                   " ' -out ", paste(genBankPath, QueryName, "_GenBank.fasta.out", 
                                     sep = ""),
                   sep = ""))
-
+sharedPathAn
 suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
 ```
 
@@ -250,6 +266,9 @@ We always want to remove temporary files that clutter the working directory, whi
 RemoveQsubTempFiles(sharedPathAn, prefix)
 ```
 
+
+***Over here!!! For the chunk below, can't run chunk clean as there are some query blasts that 
+return no no hit for Cox1 in my query set.
 #### Read and consolitdate BLAST outputs. I would like to fix this so that I can loop this for all the Blast output tables.
 ```{r}
 library("seqinr")
@@ -306,7 +325,7 @@ queryMetadata$uniqueGB         <- paste(queryMetadata$QueryName, ".uniqueGB.txt"
 queryMetadata$uniqueGBPath     <- paste(genBankPath, queryMetadata$uniqueGB, sep = "")
 ```
 
-
+# ***Over here!! how do I fix the Ape package to do https (instead of http)?
 #### Gather unique sequences, order and retrieve full names and write to new fasta:
 ```{r}
 library("ape")
@@ -316,10 +335,10 @@ i <- 1
 for (i in 1:nrow(queryMetadata)) {
     uniqueGBtemp <- scan(paste(genBankPath, queryMetadata$uniqueGB[i], sep = ""), what = "", sep = "\n")
     sequences    <- read.GenBank(uniqueGBtemp,
-                              seq.names = uniqueGBtemp, 
-                              species.names = TRUE,
-                              gene.names    = FALSE, 
-                              as.character  = TRUE)
+                                 seq.names = uniqueGBtemp, 
+                                 species.names = TRUE,
+                                 gene.names    = FALSE, 
+                                 as.character  = TRUE)
     sequenceOrder <- sequences[order(names(sequences))]
     names(sequenceOrder)[1]
     attr(sequences, "species")
