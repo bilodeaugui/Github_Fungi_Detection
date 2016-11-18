@@ -18,6 +18,7 @@ scriptsPath <- root$make_fix_file(".")("R")
 scripts <- dir(root$find_file("R", path = root$find_file()))
 scriptsl <- paste(scriptsPath, scripts, sep = "//")
 lapply(scriptsl, source)
+
 ```
 
 Getting started in R: Set the working directory
@@ -54,7 +55,7 @@ Record the path to the working directory and where the fasta files are. Create a
 directory if not already made, and manually put your query sequence(s) in the idFolder. 
 ```{r}
 sharedPath   <- "/home/CFIA-ACIA/girouxeml/PIRL_working_directory/"
-setwd(sharedPath)
+#setwd(sharedPath)
 
 idFolder  <- "Helotiales_COX1/"
 dir.create(paste("", idFolder, sep = ""), 
@@ -71,7 +72,14 @@ dir.create(paste("", idFolder, "/", "GenBank/", sep = ""),
            showWarnings = TRUE,
            recursive    = FALSE)
 
+queryCsv <- list.files(path = rootPath, 
+                       pattern = "\\.csv$", 
+                       recursive = FALSE)
 
+cmd <-  paste(" cp ", paste(rootPath, queryCsv, sep = ""),
+              " ", paste(sharedPath, idFolder, ".", sep = ""))
+              
+system(cmd)
 ```
 
 ## Specifying your starting query sequence(s)
@@ -104,7 +112,10 @@ idFastaFiles <- list.files(path = paste(sharedPath, idFolder, sep = ""),
 ```{r}
 idFastaFiles
 idFastaFiles <- idFastaFiles[1] # If I only want this one
-idFastaFiles
+cmd <- paste("cp ", paste(sharedPath, idFolder, idFastaFiles, sep = ""),
+             " ", paste(sharedPath, idFolder, "query.fasta", sep = ""))
+system(cmd)
+idFastaFiles <- "query.fasta"
 querySingleFasta <- idFastaFiles
 ```
 
@@ -158,14 +169,14 @@ unless you save it elsewhere and then specify the path to the place you choose t
 ```{r}
 library("rentrez")
 
-queryCsv <- list.files(path = rootPath, 
+queryCsv <- list.files(path = paste(sharedPath, idFolder, sep = ""), 
                        pattern = "\\.csv$", 
                        recursive = FALSE)
 queryCsv
 queryCsv <- queryCsv[1] # Choose the correct csv file number from those printed out in the console
 queryCsv
 
-queryMetadata <- read.csv(paste(rootPath, queryCsv, sep = ""), stringsAsFactors = FALSE)
+queryMetadata <- read.csv(paste(sharedPath, idFolder, queryCsv, sep = ""), stringsAsFactors = FALSE)
 queryMetadata$Include_organism <- gsub(";", "[ORGN] OR", queryMetadata$Include_organism, 
                                        ignore.case = FALSE)
 queryMetadata$Include_organism <- gsub("$", "[ORGN]", queryMetadata$Include_organism, 
@@ -244,7 +255,7 @@ cmd <- with(queryMetadata,
                   " ' -out ", paste(genBankPath, QueryName, "_GenBank.fasta.out", 
                                     sep = ""),
                   sep = ""))
-sharedPathAn
+
 suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
 ```
 
@@ -269,13 +280,16 @@ RemoveQsubTempFiles(sharedPathAn, prefix)
 
 ***Over here!!! For the chunk below, can't run chunk clean as there are some query blasts that 
 return no no hit for Cox1 in my query set.
+
+*** I ran this clean 2 weeks ago, not sure if I changed something by accident,
+not all uniqueGB.txt files are being written
 #### Read and consolitdate BLAST outputs. I would like to fix this so that I can loop this for all the Blast output tables.
 ```{r}
 library("seqinr")
 
-i <- 1
+i <- 6
 newGbBlastTable <- data.frame()
-
+queryMetadata$QueryName[i]
 for (i in 1:nrow(queryMetadata)) {
     gbBlastTable <- read.table(paste(genBankPath, queryMetadata$BlastGB_FastaOUT[i], sep = ""),
                               header = FALSE,
@@ -329,16 +343,17 @@ queryMetadata$uniqueGBPath     <- paste(genBankPath, queryMetadata$uniqueGB, sep
 #### Gather unique sequences, order and retrieve full names and write to new fasta:
 ```{r}
 library("ape")
+library(RCurl)
 
-i <- 1
+i <- 2
 
 for (i in 1:nrow(queryMetadata)) {
     uniqueGBtemp <- scan(paste(genBankPath, queryMetadata$uniqueGB[i], sep = ""), what = "", sep = "\n")
-    sequences    <- read.GenBank(uniqueGBtemp,
-                                 seq.names = uniqueGBtemp, 
-                                 species.names = TRUE,
-                                 gene.names    = FALSE, 
-                                 as.character  = TRUE)
+    sequences    <- read.GenBank2(uniqueGBtemp,
+                                  seq.names = uniqueGBtemp, 
+                                  species.names = TRUE,
+                                  gene.names    = FALSE, 
+                                  as.character  = TRUE)
     sequenceOrder <- sequences[order(names(sequences))]
     names(sequenceOrder)[1]
     attr(sequences, "species")
