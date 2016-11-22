@@ -65,10 +65,10 @@ library(Biostrings)
 Record the path to the working directory and where the fasta files are. Create a new idFolder 
 directory if not already made, and manually put your query sequence(s) in the idFolder. 
 ```{r}
-sharedPath   <- "/home/CFIA-ACIA/girouxeml/PIRL_working_directory/"
+sharedPath   <- "/home/CFIA-ACIA/bilodeaug/R_working_directory/"
 #setwd(sharedPath)
 
-idFolder  <- "Verticillium_Mito/"
+idFolder  <- "Verticillium_tRNLG/"
 dir.create(paste(sharedPath, idFolder, sep = ""), 
            showWarnings = TRUE,
            recursive    = FALSE)
@@ -101,7 +101,7 @@ variable.
 
 1. Specify the name of the query fasta file:
 ```{r}
-querySingleFasta <- "Visaacii_tRNA-L-G-Asp-Ser.fasta"
+querySingleFasta <- "Visaa_tRNA-L-Gly.fasta"
 ```
 &nbsp;&nbsp;&nbsp;&nbsp;2\. Provide the path to the query. Default is to place the query file in the idFolder and don't change
 anything in the following chunk.
@@ -144,7 +144,7 @@ queryFasta <- readDNAStringSet(queryPath, format = "fasta")
 
 *If you want to change the name of the single-query sequence, specify in the following chunk:*
 ```{r}
-names(queryFasta) <- "Visaacii_tRNA-L-G-Asp-Ser"
+names(queryFasta) <- "Visaa_tRNA-L-G"
 ```
 
 *The query specified will be used as input to GenBank.*
@@ -300,6 +300,7 @@ metaquery <- sub(genBankPath, "", epty)
 metaquery <- sub("_GenBank.fasta.out", "", metaquery)
 unlink(epty, recursive = TRUE, force = FALSE)
 queryMetadataOld <- queryMetadata
+queryMetadata <- queryMetadataOld # To fix in case there are no empty files - so taht table isn't messed up.
 queryMetadata <- queryMetadata[!(queryMetadata$QueryName==metaquery),] #d<-d[!(d$A=="B" & d$E==0),]
 queryMetadata <- subset(queryMetadata, (!queryMetadata$QueryName==metaquery))
 row.names(queryMetadata) = NULL
@@ -586,7 +587,7 @@ suffix <- ".sub"; cat(bashDirections); MakeQsubs(cmd, prefix, suffix)
 ```{r}
 system("/opt/gridengine/bin/linux-x64/qstat")
 ```
-
+** Stopped here!!! with Guillaume
 *Clean-up step: Remove the output files while keeping the qsub and bash file:*
 ```{r}
 RemoveQsubTempFiles(sharedPathAn, prefix)
