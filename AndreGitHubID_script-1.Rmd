@@ -9,7 +9,19 @@ biocLite("BiocUpgrade")
 ```{r}
 install.packages("rprojroot")
 ```
+There is an error that is generated after trying to install package rprojroot:
+"One or more of the packages that will be updated by this installation are currently loaded. 
+Restarting R prior to updating these packages is strongly recommended.
 
+RStudio can restart R and then automatically continue the installation after restarting (all work 
+and data will be preserved during the restart).
+
+Do you want to restart R prior to installing?"
+
+In this case, say no, and at the command prompt in the console window enter: rm(list=ls())
+Then repeat the install.packages("rprojroot") and let R restart - should fix things.
+See: 
+https://support.rstudio.com/hc/en-us/community/posts/202813277-Small-bug-with-Check-for-package-Updates-
 ```{r}
 library(rprojroot)
 root <- rprojroot::is_rstudio_project
@@ -18,7 +30,6 @@ scriptsPath <- root$make_fix_file(".")("R")
 scripts <- dir(root$find_file("R", path = root$find_file()))
 scriptsl <- paste(scriptsPath, scripts, sep = "//")
 lapply(scriptsl, source)
-
 ```
 
 Getting started in R: Set the working directory
@@ -57,18 +68,18 @@ directory if not already made, and manually put your query sequence(s) in the id
 sharedPath   <- "/home/CFIA-ACIA/girouxeml/PIRL_working_directory/"
 #setwd(sharedPath)
 
-idFolder  <- "Helotiales_COX1/"
-dir.create(paste("", idFolder, sep = ""), 
+idFolder  <- "Verticillium_Mito/"
+dir.create(paste(sharedPath, idFolder, sep = ""), 
            showWarnings = TRUE,
            recursive    = FALSE)
 
 sharedPathAn <- paste(sharedPath, idFolder, "output/", sep = "")
-dir.create(paste("", idFolder, "output/", sep = ""), 
+dir.create(paste(sharedPath, idFolder, "output/", sep = ""), 
            showWarnings = TRUE,
            recursive    = FALSE)
 
 genBankPath <- paste(sharedPath, idFolder, "GenBank/", sep = "")
-dir.create(paste("", idFolder, "/", "GenBank/", sep = ""), 
+dir.create(paste(sharedPath, idFolder, "/", "GenBank/", sep = ""), 
            showWarnings = TRUE,
            recursive    = FALSE)
 
@@ -90,7 +101,7 @@ variable.
 
 1. Specify the name of the query fasta file:
 ```{r}
-querySingleFasta <- "with_mfannot_added-contig00001-cox1_gene-portion_overlapped_by_bos_taurus_mtco1.fasta"
+querySingleFasta <- "Visaacii_tRNA-L-G-Asp-Ser.fasta"
 ```
 &nbsp;&nbsp;&nbsp;&nbsp;2\. Provide the path to the query. Default is to place the query file in the idFolder and don't change
 anything in the following chunk.
@@ -133,7 +144,7 @@ queryFasta <- readDNAStringSet(queryPath, format = "fasta")
 
 *If you want to change the name of the single-query sequence, specify in the following chunk:*
 ```{r}
-names(queryFasta) <- "Lawii_COX1_partial_region"
+names(queryFasta) <- "Visaacii_tRNA-L-G-Asp-Ser"
 ```
 
 *The query specified will be used as input to GenBank.*
@@ -277,9 +288,24 @@ We always want to remove temporary files that clutter the working directory, whi
 RemoveQsubTempFiles(sharedPathAn, prefix)
 ```
 
+Important: Look at the output files from the previous qsub run, namely the files with the 
+suffix "_GenBank.fasta.out".
+If any of these are empty files, it means there was no hit between your query and the list of 
+gi's you searched against. Remove these query rows from your metadata table to avoid loops
+breaking in the remaining script chunks.
+```{r}
+list <- paste(c(genBankPath), queryMetadata$BlastGB_FastaOUT, sep = "") # GenBankPath is recycled
+epty <- list[file.info(list)[["size"]]==0]
+epty
+metaquery <- sub(genBankPath, "", epty)
+metaquery <- sub("_GenBank.fasta.out", "", metaquery)
+unlink(epty, recursive = TRUE, force = FALSE)
+queryMetadataOld <- queryMetadata
+queryMetadata <- queryMetadata[!(queryMetadata$QueryName==metaquery),] #d<-d[!(d$A=="B" & d$E==0),]
+queryMetadata <- subset(queryMetadata, (!queryMetadata$QueryName==metaquery))
+row.names(queryMetadata) = NULL
+```
 
-***Over here!!! For the chunk below, can't run chunk clean as there are some query blasts that 
-return no no hit for Cox1 in my query set.
 
 *** I ran this clean 2 weeks ago, not sure if I changed something by accident,
 not all uniqueGB.txt files are being written
@@ -287,9 +313,9 @@ not all uniqueGB.txt files are being written
 ```{r}
 library("seqinr")
 
-i <- 6
+i <- 5
 newGbBlastTable <- data.frame()
-queryMetadata$QueryName[i]
+
 for (i in 1:nrow(queryMetadata)) {
     gbBlastTable <- read.table(paste(genBankPath, queryMetadata$BlastGB_FastaOUT[i], sep = ""),
                               header = FALSE,
@@ -316,7 +342,7 @@ for (i in 1:nrow(queryMetadata)) {
                 } 
         }
     gbBlastTable <- newGbBlastTable
-   # Creates a +/- column for orientation of sequences
+    # Creates a +/- column for orientation of sequences
     gbBlastTable$orientation <- sign(gbBlastTable$s_end - gbBlastTable$s_start)
     gbBlastTable$length      <- abs(gbBlastTable$s_end - gbBlastTable$s_start)
     gbBlastTable$query_id    <- as.character(gbBlastTable$query_id)
@@ -339,21 +365,26 @@ queryMetadata$uniqueGB         <- paste(queryMetadata$QueryName, ".uniqueGB.txt"
 queryMetadata$uniqueGBPath     <- paste(genBankPath, queryMetadata$uniqueGB, sep = "")
 ```
 
-# ***Over here!! how do I fix the Ape package to do https (instead of http)?
+*** Over here!!! The problem is now that my loop only uses the first read.GenBank2 file.
 #### Gather unique sequences, order and retrieve full names and write to new fasta:
 ```{r}
 library("ape")
 library(RCurl)
 
-i <- 2
+i     <- 1
+total <- length(queryMetadata$QueryName)
+pb    <- txtProgressBar(min = 0, max = total, style = 3)   # create progress bar
+
 
 for (i in 1:nrow(queryMetadata)) {
     uniqueGBtemp <- scan(paste(genBankPath, queryMetadata$uniqueGB[i], sep = ""), what = "", sep = "\n")
+    length(uniqueGBtemp)
     sequences    <- read.GenBank2(uniqueGBtemp,
                                   seq.names = uniqueGBtemp, 
                                   species.names = TRUE,
                                   gene.names    = FALSE, 
                                   as.character  = TRUE)
+    #Sys.sleep(0.5)
     sequenceOrder <- sequences[order(names(sequences))]
     names(sequenceOrder)[1]
     attr(sequences, "species")
@@ -378,7 +409,9 @@ for (i in 1:nrow(queryMetadata)) {
                                      queryMetadata$QueryName[i], ".gbDNAString.fasta", sep = ""),
                         append = TRUE, format = "fasta")
         }
+    setTxtProgressBar(pb, i)
     }
+close(pb)
 ```
 
 #### Add the name of the gbDNAString to the queryMetadata table: 
