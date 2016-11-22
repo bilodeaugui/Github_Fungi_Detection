@@ -313,10 +313,10 @@ not all uniqueGB.txt files are being written
 ```{r}
 library("seqinr")
 
-i <- 5
-newGbBlastTable <- data.frame()
+i <- 1
 
 for (i in 1:nrow(queryMetadata)) {
+    newGbBlastTable <- data.frame() # This MUST be kept in the loop(Not outside of it)!
     gbBlastTable <- read.table(paste(genBankPath, queryMetadata$BlastGB_FastaOUT[i], sep = ""),
                               header = FALSE,
                               stringsAsFactors = FALSE)
@@ -349,11 +349,11 @@ for (i in 1:nrow(queryMetadata)) {
     
     summary(gbBlastTable)
     colnames(gbBlastTable)[2] <- "GB_accession"
-    uniqueGB <- unique(gbBlastTable$GB_accession)
     write.table(gbBlastTable,
                 file = paste(genBankPath, queryMetadata$BlastGB_FastaOUT[i], ".New.txt", sep = ""),
                 sep = "\t",
                 append = FALSE, quote  = FALSE, row.names = FALSE, col.names = TRUE)
+    uniqueGB <- unique(gbBlastTable$GB_accession)
     write.table(uniqueGB,
                 file = paste(genBankPath, queryMetadata$QueryName[i], ".uniqueGB.txt", sep = ""),
                 append = FALSE, quote=FALSE, row.names=FALSE, col.names = FALSE)
@@ -365,7 +365,7 @@ queryMetadata$uniqueGB         <- paste(queryMetadata$QueryName, ".uniqueGB.txt"
 queryMetadata$uniqueGBPath     <- paste(genBankPath, queryMetadata$uniqueGB, sep = "")
 ```
 
-*** Over here!!! The problem is now that my loop only uses the first read.GenBank2 file.
+
 #### Gather unique sequences, order and retrieve full names and write to new fasta:
 ```{r}
 library("ape")
@@ -374,7 +374,6 @@ library(RCurl)
 i     <- 1
 total <- length(queryMetadata$QueryName)
 pb    <- txtProgressBar(min = 0, max = total, style = 3)   # create progress bar
-
 
 for (i in 1:nrow(queryMetadata)) {
     uniqueGBtemp <- scan(paste(genBankPath, queryMetadata$uniqueGB[i], sep = ""), what = "", sep = "\n")
