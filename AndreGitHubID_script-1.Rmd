@@ -370,7 +370,7 @@ library(RCurl)
 
 i     <- 1
 total <- length(queryMetadata$QueryName)
-pb    <- txtProgressBar(min = 0, max = total, style = 3)   # create progress bar
+pb    <- txtProgressBar(min = 0, max = total, style = 3)   # Create progress bar
 
 for (i in 1:nrow(queryMetadata)) {
     uniqueGBtemp <- scan(paste(genBankPath, queryMetadata$uniqueGB[i], sep = ""), what = "", sep = "\n")
@@ -380,7 +380,6 @@ for (i in 1:nrow(queryMetadata)) {
                                   species.names = TRUE,
                                   gene.names    = FALSE, 
                                   as.character  = TRUE)
-    #Sys.sleep(0.5)
     sequenceOrder <- sequences[order(names(sequences))]
     names(sequenceOrder)[1]
     attr(sequences, "species")
