@@ -288,8 +288,7 @@ We always want to remove temporary files that clutter the working directory, whi
 RemoveQsubTempFiles(sharedPathAn, prefix)
 ```
 
-Important: Look at the output files from the previous qsub run, namely the files with the 
-suffix "_GenBank.fasta.out".
+##Important: Look at the output files from the previous qsub run, namely the files with the suffix "_GenBank.fasta.out".
 If any of these are empty files, it means there was no hit between your query and the list of 
 gi's you searched against. Remove these query rows from your metadata table to avoid loops
 breaking in the remaining script chunks.
@@ -307,9 +306,7 @@ row.names(queryMetadata) = NULL
 ```
 
 
-*** I ran this clean 2 weeks ago, not sure if I changed something by accident,
-not all uniqueGB.txt files are being written
-#### Read and consolitdate BLAST outputs. I would like to fix this so that I can loop this for all the Blast output tables.
+#### Read and consolitdate BLAST outputs.
 ```{r}
 library("seqinr")
 
@@ -415,7 +412,7 @@ close(pb)
 
 #### Add the name of the gbDNAString to the queryMetadata table: 
 ```{r}
-queryMetadata$gbDNAString   <- paste(queryMetadata$QueryName, ".gbDNAString.fasta", sep = "")
+queryMetadata$gbDNAString     <- paste(queryMetadata$QueryName, ".gbDNAString.fasta", sep = "")
 queryMetadata$gbDNAStringPath <- paste(genBankPath, queryMetadata$gbDNAString, sep = "")
 ```
 
