@@ -68,7 +68,7 @@ directory if not already made, and manually put your query sequence(s) in the id
 sharedPath   <- "/home/CFIA-ACIA/bilodeaug/R_working_directory/"
 #setwd(sharedPath)
 
-idFolder  <- "Verticillium_tRNLG/"
+idFolder  <- "Verticillium_tRNLG-2/"
 dir.create(paste(sharedPath, idFolder, sep = ""), 
            showWarnings = TRUE,
            recursive    = FALSE)
@@ -97,11 +97,13 @@ system(cmd)
 ### Option A: 1 starting sequence
 If I want to run this script with only 1 starting sequence:
 Specify Folder, read it, rename the sequence if necessary, and put that into the fasta for genBank
-variable.  
+variable. 
+### NOTE: I encountered problems in the script when using a fasta sequence extracted from an 
+### alignment in Geneious where the gaps were not removed - so watch out for this.
 
 1. Specify the name of the query fasta file:
 ```{r}
-querySingleFasta <- "Visaa_tRNA-L-Gly.fasta"
+querySingleFasta <- "Visaacii_noGaps11067-13237Mito.fasta"
 ```
 &nbsp;&nbsp;&nbsp;&nbsp;2\. Provide the path to the query. Default is to place the query file in the idFolder and don't change
 anything in the following chunk.
@@ -122,7 +124,7 @@ idFastaFiles <- list.files(path = paste(sharedPath, idFolder, sep = ""),
 &nbsp;&nbsp;&nbsp;&nbsp;2\. Pick the right file(s)
 ```{r}
 idFastaFiles
-idFastaFiles <- idFastaFiles[1] # If I only want this one
+idFastaFiles <- idFastaFiles[2] # If I only want this one
 cmd <- paste("cp ", paste(sharedPath, idFolder, idFastaFiles, sep = ""),
              " ", paste(sharedPath, idFolder, "query.fasta", sep = ""))
 system(cmd)
@@ -144,7 +146,7 @@ queryFasta <- readDNAStringSet(queryPath, format = "fasta")
 
 *If you want to change the name of the single-query sequence, specify in the following chunk:*
 ```{r}
-names(queryFasta) <- "Visaa_tRNA-L-G"
+names(queryFasta) <- "Visaa_11067-13237Mito"
 ```
 
 *The query specified will be used as input to GenBank.*
@@ -172,6 +174,8 @@ Query2     | Helotiales; Sclerotinia | rRNA; misc_RNA  | environmental samples; 
 
 *You can have 1 or more queries and each criteria may have one or more variables. This script is not
 yet adapted to blank inputs.
+*Note: [FEATURE] is not a searchable term in nuucore. For a list of searchable terms do:
+entrez_db_searchable("nuccore")
 
 The following chunk reads in your prepared csv file that has your query criteria for each query.
 This is looking for your prepared csv in your github project folder.
@@ -184,17 +188,23 @@ queryCsv <- list.files(path = paste(sharedPath, idFolder, sep = ""),
                        pattern = "\\.csv$", 
                        recursive = FALSE)
 queryCsv
-queryCsv <- queryCsv[1] # Choose the correct csv file number from those printed out in the console
+queryCsv <- queryCsv[2] # Choose the correct csv file number from those printed out in the console
 queryCsv
 
 queryMetadata <- read.csv(paste(sharedPath, idFolder, queryCsv, sep = ""), stringsAsFactors = FALSE)
+```
+
+The following will reformat your query criteria for rentrez search against the "nuccore" database.
+If you want to search other databases, you need to specify the appropriate search feilds for the
+specific database you want to query.
+```{r}
 queryMetadata$Include_organism <- gsub(";", "[ORGN] OR", queryMetadata$Include_organism, 
                                        ignore.case = FALSE)
 queryMetadata$Include_organism <- gsub("$", "[ORGN]", queryMetadata$Include_organism, 
                                        ignore.case = FALSE)
-queryMetadata$Include_feature  <- gsub(";", "[Feature] OR", queryMetadata$Include_feature, 
+queryMetadata$Include_feature  <- gsub(";", "[ALL] OR", queryMetadata$Include_feature, 
                                        ignore.case = FALSE)
-queryMetadata$Include_feature  <- gsub("$", "[Feature]", queryMetadata$Include_feature, 
+queryMetadata$Include_feature  <- gsub("$", "[ALL]", queryMetadata$Include_feature, 
                                        ignore.case = FALSE)
 queryMetadata$Exclude_organism  <- gsub(";", "[ORGN] OR", queryMetadata$Exclude_organism, 
                                        ignore.case = FALSE)
@@ -204,7 +214,6 @@ queryMetadata$FullQuery <- paste("(", queryMetadata$Include_organism,
                                  " AND (", queryMetadata$Include_feature, 
                                  ")) NOT(", queryMetadata$Exclude_organism, ")",
                                  sep = "")
-
 write.table(queryMetadata, 
             file = file.path(paste(sharedPath, idFolder, sep = ""), "query_criteria_Full.csv"),
             append    = FALSE, 
@@ -212,6 +221,18 @@ write.table(queryMetadata,
             quote     = FALSE,
             row.names = TRUE,
             col.names = NA)
+```
+
+## Understanding rentrez:
+```{r}
+library("rentrez")
+entrez_dbs(config = NULL)
+genBankFeilds <- entrez_db_searchable("sra")
+genBankFeilds[["FKEY"]]
+entrez_search(db="nuccore", term="mitochondrion[ALL]", retmax=0)
+entrez_search(db="pmc", term="Auckland[AFFL]", retmax=0)
+sra_fields <- entrez_db_searchable("sra")
+as.data.frame(genBankFeilds)
 ```
 
 #### Generate the databases as gene ID lists, *gilist.txt*, and write these to the GenBank folder:
@@ -229,7 +250,6 @@ for (k in 1:nrow(queryMetadata)) {
               file = paste(genBankPath, queryMetadata$QueryName[k], "_gilist.txt", sep = ""),
               append = FALSE, quote  = FALSE, row.names = FALSE, col.names = FALSE)
 }
-
 ```
 
 #### Set the Blast options and output format:  
@@ -296,16 +316,13 @@ breaking in the remaining script chunks.
 list <- paste(c(genBankPath), queryMetadata$BlastGB_FastaOUT, sep = "") # GenBankPath is recycled
 epty <- list[file.info(list)[["size"]]==0]
 epty
-metaquery <- sub(genBankPath, "", epty)
+metaquery <- basename(epty)
 metaquery <- sub("_GenBank.fasta.out", "", metaquery)
-unlink(epty, recursive = TRUE, force = FALSE)
+metaquery
 queryMetadataOld <- queryMetadata
-queryMetadata <- queryMetadataOld # To fix in case there are no empty files - so taht table isn't messed up.
-queryMetadata <- queryMetadata[!(queryMetadata$QueryName==metaquery),] #d<-d[!(d$A=="B" & d$E==0),]
-queryMetadata <- subset(queryMetadata, (!queryMetadata$QueryName==metaquery))
-row.names(queryMetadata) = NULL
+queryMetadata <- queryMetadata[ ! queryMetadata$QueryName %in% metaquery, ]
+unlink(epty, recursive = TRUE, force = FALSE)
 ```
-
 
 #### Read and consolitdate BLAST outputs.
 ```{r}
@@ -504,6 +521,7 @@ queryMetadata$allAlignedPath <- paste(sharedPath, idFolder, queryMetadata$allAli
 
 #### Trim
 ```{r}
+i <- 1
 
 library("chemometrics")
 for (i in 1:nrow(queryMetadata)) {
@@ -593,6 +611,21 @@ system("/opt/gridengine/bin/linux-x64/qstat")
 RemoveQsubTempFiles(sharedPathAn, prefix)
 ```
 
+```{r}
+list <- queryMetadata$allAlignedPath
+epty <- list[file.info(list)[["size"]]==0]
+epty
+metaquery <- basename(epty)
+metaquery <- sub(".All_files_aligned.fasta", "", metaquery)
+metaquery
+
+queryMetadataOld <- queryMetadata
+# queryMetadata <- queryMetadataOld # To fix in case there are no empty files - so taht table isn't messed up.
+
+queryMetadata <- queryMetadata[ ! queryMetadata$QueryName %in% metaquery, ]
+unlink(epty, recursive = TRUE, force = FALSE)
+```
+
 #### Pre-record the name of the Newick and neighbour-goining tree
 in the metadata table:
 ```{r}
@@ -606,7 +639,8 @@ queryMetadata$njK80TreePath <- paste(sharedPath, idFolder, queryMetadata$njK80Tr
 ### Generate the trees
 ```{r}
 library("ape")
-i <- 1
+#install.packages("phytools")
+i <- 2
 
 for (i in 1:nrow(queryMetadata)) {
     alignTemp <- read.dna(queryMetadata$allAlignedPath[i], format = "fasta")
